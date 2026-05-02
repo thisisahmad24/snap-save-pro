@@ -1,0 +1,8 @@
+graph TD
+    User((User)) <--> NextJS[Next.js 15 Frontend]
+    NextJS <--> Auth[Supabase Auth]
+    NextJS <--> FastAPI[FastAPI Python Backend]
+    FastAPI <--> YTDLP[yt-dlp Library]
+    FastAPI <--> DB[(Supabase Database)]
+    NextJS <--> Formspree[Formspree API]
+    NextJS <--> Payment[Payment Gateway Mock]
