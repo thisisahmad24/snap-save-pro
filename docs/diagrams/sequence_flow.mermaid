@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant U as User
+    participant F as Next.js Frontend
+    participant B as FastAPI Backend
+    participant DB as Supabase DB
+    participant SM as Social Media Platform
+
+    U->>F: Enter Link & Click Download
+    F->>B: POST /extract {url, type}
+    B->>DB: Check Free Quota (user_id)
+    
+    alt Under Limit
+        DB-->>B: Access Granted
+        B->>SM: Fetch Media with yt-dlp
+        SM-->>B: Media Stream/URL
+        B-->>F: Success {data, quota_remaining}
+        F-->>U: Show Media Preview & Download Button
+    else Over Limit
+        DB-->>B: Limit Reached
+        B-->>F: Error {reason: "limit_exceeded"}
+        F-->>U: Show PKR 10 Payment Modal
+    end
