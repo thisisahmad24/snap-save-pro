@@ -1,17 +1,31 @@
-usecaseDiagram
-    actor "Guest User" as Guest
-    actor "Registered User" as User
-    actor "Admin System" as Admin
+flowchart LR
+    subgraph Actors
+        Guest[Guest User]
+        User[Registered User]
+        Admin[Admin System]
+    end
 
-    Guest --> (View Landing Page)
-    Guest --> (Paste Link)
-    Guest --> (Download Free Limit)
-    Guest --> (Signup/Login)
+    subgraph "SnapSave Pro System"
+        UC1(["View Landing Page"])
+        UC2(["Paste Link"])
+        UC3(["Download Free Limit"])
+        UC4(["Signup/Login"])
+        UC5(["Download Media"])
+        UC6(["Pay PKR 10 per Video"])
+        UC7(["Submit Queries/Feedback"])
+        UC8(["Monitor Traffic"])
+        UC9(["Update Downloader Engine"])
+    end
 
-    User --> (Paste Link)
-    User --> (Download Media)
-    User --> (Pay PKR 10 per Video)
-    User --> (Submit Queries/Feedback)
+    Guest --> UC1
+    Guest --> UC2
+    Guest --> UC3
+    Guest --> UC4
 
-    Admin --> (Monitor Traffic)
-    Admin --> (Update Downloader Engine)
+    User --> UC2
+    User --> UC5
+    User --> UC6
+    User --> UC7
+
+    Admin --> UC8
+    Admin --> UC9
