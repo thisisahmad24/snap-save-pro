@@ -60,6 +60,10 @@ def extract_media_info(url: str) -> dict:
         "socket_timeout": 20,
     }
 
+    # Clean the URL to remove tracking parameters which often break Instagram extraction
+    if "instagram.com" in url.lower():
+        url = url.split("?")[0]
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
