@@ -1,8 +1,60 @@
 import yt_dlp
 import logging
+import httpx
+import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def _fallback_instagram_rapidapi(url: str) -> dict:
+    rapid_key = os.getenv("RAPIDAPI_KEY")
+    if not rapid_key:
+        return {"success": False, "error": "RapidAPI key not configured."}
+    
+    api_url = "https://instagram-scraper-api2.p.rapidapi.com/v1/post_info"
+    querystring = {"code_or_id_or_url": url, "include_insights": "false"}
+    headers = {
+        "X-RapidAPI-Key": rapid_key,
+        "X-RapidAPI-Host": "instagram-scraper-api2.p.rapidapi.com"
+    }
+
+    try:
+        with httpx.Client(timeout=15) as client:
+            response = client.get(api_url, headers=headers, params=querystring)
+        data = response.json()
+        
+        if "data" in data and "items" in data["data"] and len(data["data"]["items"]) > 0:
+            item = data["data"]["items"][0]
+            video_versions = item.get("video_versions", [])
+            download_url = video_versions[0].get("url", "") if video_versions else ""
+            
+            if not download_url:
+                image_versions = item.get("image_versions2", {}).get("candidates", [])
+                if image_versions:
+                    download_url = image_versions[0].get("url", "")
+            
+            if download_url:
+                caption = item.get("caption", {})
+                title = caption.get("text", "Instagram Content") if caption else "Instagram Content"
+                thumbnail = ""
+                image_versions = item.get("image_versions2", {}).get("candidates", [])
+                if image_versions:
+                    thumbnail = image_versions[0].get("url", "")
+                
+                return {
+                    "success": True,
+                    "title": title[:50] + "..." if len(title) > 50 else title,
+                    "thumbnail": thumbnail,
+                    "download_url": download_url,
+                    "platform": "instagram",
+                    "ext": "mp4" if video_versions else "jpg"
+                }
+                
+        return {"success": False, "error": data.get("message", "Could not fetch Instagram data from fallback API.")}
+    except Exception as e:
+        logger.error(f"RapidAPI fallback error: {e}")
+        return {"success": False, "error": "Fallback API failed."}
+
 
 
 def _best_format_url(info: dict) -> str | None:
@@ -110,6 +162,16 @@ def extract_media_info(url: str) -> dict:
     except yt_dlp.utils.DownloadError as e:
         err = str(e)
         logger.error(f"yt-dlp DownloadError for {url}: {err}")
+        
+        # Fallback to RapidAPI if Instagram blocks Vercel/Render IPs
+        if "instagram.com" in url.lower():
+            logger.info("yt-dlp blocked. Attempting RapidAPI fallback for Instagram...")
+            fallback_res = _fallback_instagram_rapidapi(url)
+            if fallback_res.get("success"):
+                return fallback_res
+            else:
+                logger.error(f"Fallback failed: {fallback_res.get('error')}")
+                
         if "private" in err.lower() or "login" in err.lower():
             return {"success": False, "error": "This content is private or requires login."}
         if "unavailable" in err.lower() or "not available" in err.lower():
