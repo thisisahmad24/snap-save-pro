@@ -20,10 +20,7 @@ app = FastAPI(title="SnapSave Pro API", version="1.0.0")
 # ─────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://snap-save-pro.vercel.app",  # update with your prod domain
-    ],
+    allow_origins=["*"], # Allow all origins for easier testing during launch
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
