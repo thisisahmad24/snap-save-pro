@@ -109,6 +109,12 @@ def extract_media_info(url: str) -> dict:
         "skip_download": True,
         "noplaylist": True,
         "socket_timeout": 20,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["web", "mweb", "ios"],
+                "player_skip": ["webpage", "configs"]
+            }
+        }
     }
 
 
