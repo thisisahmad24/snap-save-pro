@@ -104,19 +104,14 @@ def extract_media_info(url: str) -> dict:
     Returns a standardised dict with title, thumbnail, download_url, platform etc.
     """
     ydl_opts = {
-        "format": "best", # More flexible format selection
+        "format": "best",
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
-        "noplaylist": True,       # never grab whole playlists
+        "noplaylist": True,
         "socket_timeout": 20,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["web", "mweb", "ios"],
-                "player_skip": ["webpage", "configs"]
-            }
-        }
     }
+
 
 
     # Use cookies if provided in environment variables to bypass login walls
