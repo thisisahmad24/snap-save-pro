@@ -104,7 +104,7 @@ def extract_media_info(url: str) -> dict:
     Returns a standardised dict with title, thumbnail, download_url, platform etc.
     """
     ydl_opts = {
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "format": "best", # More flexible format selection
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
