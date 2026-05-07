@@ -30,8 +30,9 @@ export default function Footer() {
         </div>
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', display: 'flex', justifyContent: 'space-between', opacity: 0.5, fontSize: '0.8rem' }}>
           <div>© 2026 SnapSave Pro. All rights reserved.</div>
-          <div style={{ display: 'flex', gap: '2rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
             <span>Made with ❤️ for Creators</span>
+            <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>Debug: {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}</span>
           </div>
         </div>
       </div>
