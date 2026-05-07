@@ -187,12 +187,9 @@ def extract_media_info(url: str) -> dict:
                 return fallback_res
             else:
                 logger.error(f"Fallback failed: {fallback_res.get('error')}")
+                return {"success": False, "error": f"Insta-Block: {fallback_res.get('error')}"}
                 
-        if "private" in err.lower() or "login" in err.lower():
-            return {"success": False, "error": "This content is private or requires login."}
-        if "unavailable" in err.lower() or "not available" in err.lower():
-            return {"success": False, "error": "This content is unavailable or has been removed."}
-        return {"success": False, "error": "Invalid URL or content cannot be accessed."}
+        return {"success": False, "error": f"Download Error: {err[:100]}"}
 
     except yt_dlp.utils.ExtractorError as e:
         logger.error(f"yt-dlp ExtractorError for {url}: {e}")
@@ -200,4 +197,4 @@ def extract_media_info(url: str) -> dict:
 
     except Exception as e:
         logger.error(f"Unexpected error for {url}: {e}")
-        return {"success": False, "error": "An unexpected error occurred. Please try again."}
+        return {"success": False, "error": f"System Error: {str(e)[:100]}"}
