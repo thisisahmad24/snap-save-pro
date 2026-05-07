@@ -110,16 +110,31 @@ def extract_media_info(url: str) -> dict:
         "skip_download": True,
         "noplaylist": True,       # never grab whole playlists
         "socket_timeout": 20,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["web", "mweb", "ios"],
+                "player_skip": ["webpage", "configs"]
+            }
+        }
     }
+
 
     # Use cookies if provided in environment variables to bypass login walls
     cookie_file = None
     ig_cookies = os.getenv("INSTAGRAM_COOKIES")
-    if ig_cookies and "instagram.com" in url.lower():
+    yt_cookies = os.getenv("YOUTUBE_COOKIES")
+    
+    selected_cookies = None
+    if "instagram.com" in url.lower():
+        selected_cookies = ig_cookies
+    elif "youtube.com" in url.lower() or "youtu.be" in url.lower():
+        selected_cookies = yt_cookies
+
+    if selected_cookies:
         import tempfile
         # Create a temporary file to store cookies for yt-dlp
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
-            f.write(ig_cookies)
+            f.write(selected_cookies)
             cookie_file = f.name
         ydl_opts["cookiefile"] = cookie_file
 
