@@ -6,6 +6,40 @@ import os
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def _fallback_public_api(url: str) -> dict:
+    # A list of public, free Cobalt instances that don't require keys
+    public_instances = [
+        "https://api.cobalt.tools/api/json",
+        "https://cobalt.api.unext.org/api/json",
+        "https://cobalt-api.zeat.me/api/json",
+    ]
+    
+    for instance in public_instances:
+        try:
+            logger.info(f"Trying public fallback instance: {instance}")
+            with httpx.Client(timeout=15) as client:
+                response = client.post(
+                    instance, 
+                    json={"url": url}, 
+                    headers={"Accept": "application/json", "Content-Type": "application/json"}
+                )
+            data = response.json()
+            
+            if data.get("status") == "stream" or data.get("url"):
+                return {
+                    "success": True,
+                    "title": "Downloaded Content",
+                    "thumbnail": "", # Cobalt doesn't always provide thumbs
+                    "download_url": data.get("url"),
+                    "platform": "social",
+                    "ext": "mp4"
+                }
+        except Exception as e:
+            logger.error(f"Public instance {instance} failed: {e}")
+            continue
+            
+    return {"success": False, "error": "All free extraction methods failed. Instagram/YouTube are blocking the connection."}
+
 def _fallback_instagram_rapidapi(url: str) -> dict:
     rapid_key = os.getenv("RAPIDAPI_KEY")
     if not rapid_key:
@@ -194,17 +228,15 @@ def extract_media_info(url: str) -> dict:
         err = str(e)
         logger.error(f"yt-dlp DownloadError for {url}: {err}")
         
-        # Fallback to RapidAPI if Instagram blocks Vercel/Render IPs
-        if "instagram.com" in url.lower():
-            logger.info("yt-dlp blocked. Attempting RapidAPI fallback for Instagram...")
-            fallback_res = _fallback_instagram_rapidapi(url)
-            if fallback_res.get("success"):
-                return fallback_res
-            else:
-                logger.error(f"Fallback failed: {fallback_res.get('error')}")
-                return {"success": False, "error": f"Insta-Block: {fallback_res.get('error')}"}
-                
-        return {"success": False, "error": f"Download Error: {err[:100]}"}
+        # Try Public API Fallback if yt-dlp is blocked
+        logger.info(f"yt-dlp blocked. Attempting Public API fallback...")
+        public_res = _fallback_public_api(url)
+        if public_res.get("success"):
+            return public_res
+
+        if "private" in err.lower() or "login" in err.lower():
+            return {"success": False, "error": "This content is private or requires login."}
+
 
     except yt_dlp.utils.ExtractorError as e:
         logger.error(f"yt-dlp ExtractorError for {url}: {e}")
