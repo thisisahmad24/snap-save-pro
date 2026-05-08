@@ -20,8 +20,8 @@ app = FastAPI(title="SnapSave Pro API", version="1.0.0")
 # ─────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all origins for easier testing during launch
-    allow_credentials=True,
+    allow_origins=["*"], # Allow all origins
+    allow_credentials=False, # Must be False if using ["*"] in modern browsers
     allow_methods=["*"],
     allow_headers=["*"],
 )
