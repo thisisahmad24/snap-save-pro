@@ -62,6 +62,7 @@ export default function Home() {
       
       const response = await fetch(`${apiUrl}/api/extract`, {
         method: "POST",
+        mode: "cors",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           url,

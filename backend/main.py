@@ -172,6 +172,18 @@ async def health():
         "supabase": "connected" if supabase else "disconnected"
     }
 
+@app.options("/api/extract")
+async def extract_options():
+    from fastapi.responses import Response
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
+
 @app.get("/api/extract", tags=["Downloader"])
 async def extract_get_info():
     return {"status": "error", "message": "Please use POST method for extraction."}
