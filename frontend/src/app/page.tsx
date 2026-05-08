@@ -77,7 +77,8 @@ export default function Home() {
       setResult(data);
       saveRecent(data);
     } catch (err: any) {
-      setError(err.message);
+      console.error("Extraction error:", err);
+      setError(`Network Error: ${err.message || "Unknown error"}. Check console for details.`);
     } finally {
       setLoading(false);
     }
