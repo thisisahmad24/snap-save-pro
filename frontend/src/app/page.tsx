@@ -56,7 +56,10 @@ export default function Home() {
     setLimitReached(false);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      let apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      // Sanitize URL: remove trailing slashes and whitespace
+      apiUrl = apiUrl.trim().replace(/\/+$/, "");
+      
       const response = await fetch(`${apiUrl}/api/extract`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

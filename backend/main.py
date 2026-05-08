@@ -172,6 +172,10 @@ async def health():
         "supabase": "connected" if supabase else "disconnected"
     }
 
+@app.get("/api/extract", tags=["Downloader"])
+async def extract_get_info():
+    return {"status": "error", "message": "Please use POST method for extraction."}
+
 @app.post("/api/extract", tags=["Downloader"])
 async def extract_media(request_data: ExtractRequest, request: Request):
     url = request_data.url
