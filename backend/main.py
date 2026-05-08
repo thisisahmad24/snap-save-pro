@@ -172,7 +172,7 @@ async def health():
         "supabase": "connected" if supabase else "disconnected"
     }
 
-@app.options("/api/extract")
+@app.options("/api/v1/media-query")
 async def extract_options():
     from fastapi.responses import Response
     return Response(
@@ -184,11 +184,11 @@ async def extract_options():
         },
     )
 
-@app.get("/api/extract", tags=["Downloader"])
+@app.get("/api/v1/media-query", tags=["Downloader"])
 async def extract_get_info():
     return {"status": "error", "message": "Please use POST method for extraction."}
 
-@app.post("/api/extract", tags=["Downloader"])
+@app.post("/api/v1/media-query", tags=["Downloader"])
 async def extract_media(request_data: ExtractRequest, request: Request):
     url = request_data.url
     user_id = request_data.userId

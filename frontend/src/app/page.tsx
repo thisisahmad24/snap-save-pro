@@ -60,7 +60,7 @@ export default function Home() {
       // Sanitize URL: remove trailing slashes and whitespace
       apiUrl = apiUrl.trim().replace(/\/+$/, "");
       
-      const response = await fetch(`${apiUrl}/api/extract`, {
+      const response = await fetch(`${apiUrl}/api/v1/media-query`, {
         method: "POST",
         mode: "cors",
         headers: { "Content-Type": "application/json" },
