@@ -191,51 +191,42 @@ async def extract_get_info():
 @app.post("/api/v1/media-query", tags=["Downloader"])
 async def extract_media(
     request: Request,
-    url: str = Form(None),
-    userId: Optional[str] = Form(None),
-    request_data: Optional[ExtractRequest] = None
+    url: str = Form(...),
+    userId: Optional[str] = Form(None)
 ):
-    # Support both JSON and Form data for maximum device compatibility
-    if not url and request_data:
-        url = request_data.url
-    if not userId and request_data:
-        userId = request_data.userId
+    try:
+        # Sanitize input
+        target_url = url.strip()
+        user_id = userId
         
-    if not url:
-        raise HTTPException(status_code=400, detail="URL is required.")
+        platform = _get_platform(target_url)
+        client_ip = request.client.host if request.client else "unknown"
+
+        # ── Quota check ──────────────────────────
+        if user_id:
+            if not check_user_quota(user_id, platform):
+                limit = IG_DAILY_LIMIT if platform == "instagram" else YT_DAILY_LIMIT
+                return {"success": False, "error": f"Daily limit reached. Upgrade to PRO."}
+        else:
+            if not check_guest_quota(client_ip):
+                return {"success": False, "error": "Guest limit reached. Please log in."}
+
+        # ── Extraction ───────────────────────────
+        result = extract_media_info(target_url)
         
-    user_id = userId
-    platform = _get_platform(url)
-    client_ip = request.client.host
+        if result.get("success"):
+            # Update quota after successful extraction
+            if user_id:
+                update_user_quota(user_id, platform)
+            else:
+                update_guest_quota(client_ip)
+                
+        return result
 
-    # ── Quota check ──────────────────────────
-    if user_id:
-        if not check_user_quota(user_id, platform):
-            limit = IG_DAILY_LIMIT if platform == "instagram" else YT_DAILY_LIMIT
-            raise HTTPException(
-                status_code=403,
-                detail=f"Daily limit of {limit} {platform.capitalize()} downloads reached. Upgrade to PRO for unlimited access."
-            )
-    else:
-        # Guest IP-based limiting
-        if not check_guest_quota(client_ip):
-            raise HTTPException(
-                status_code=403,
-                detail=f"Guest daily limit of {GUEST_DAILY_LIMIT} downloads reached. Sign up for free to get more downloads."
-            )
+    except Exception as e:
+        logger.error(f"Endpoint error: {e}")
+        return {"success": False, "error": f"Internal Server Error: {str(e)[:50]}"}
 
-    # ── Extract media info ───────────────────
-    result = extract_media_info(url)
-    if not result["success"]:
-        raise HTTPException(status_code=400, detail=result["error"])
-
-    # ── Increment quota post-success ─────────
-    if user_id:
-        increment_user_quota(user_id, platform)
-    else:
-        increment_guest_quota(client_ip)
-
-    return result
 
 
 if __name__ == "__main__":
