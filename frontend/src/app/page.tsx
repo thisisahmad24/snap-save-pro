@@ -60,14 +60,16 @@ export default function Home() {
       // Sanitize URL: remove trailing slashes and whitespace
       apiUrl = apiUrl.trim().replace(/\/+$/, "");
       
+      // Use URLSearchParams to send a 'Simple Request' which avoids CORS preflight checks
+      const formData = new URLSearchParams();
+      formData.append("url", url);
+      if (user?.id) formData.append("userId", user.id);
+
       const response = await fetch(`${apiUrl}/api/v1/media-query`, {
         method: "POST",
         mode: "cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          url,
-          userId: user?.id || null 
-        }),
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData.toString(),
       });
 
       const data = await response.json();

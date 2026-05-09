@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl, validator
 import os
@@ -189,9 +189,22 @@ async def extract_get_info():
     return {"status": "error", "message": "Please use POST method for extraction."}
 
 @app.post("/api/v1/media-query", tags=["Downloader"])
-async def extract_media(request_data: ExtractRequest, request: Request):
-    url = request_data.url
-    user_id = request_data.userId
+async def extract_media(
+    request: Request,
+    url: str = Form(None),
+    userId: Optional[str] = Form(None),
+    request_data: Optional[ExtractRequest] = None
+):
+    # Support both JSON and Form data for maximum device compatibility
+    if not url and request_data:
+        url = request_data.url
+    if not userId and request_data:
+        userId = request_data.userId
+        
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required.")
+        
+    user_id = userId
     platform = _get_platform(url)
     client_ip = request.client.host
 
