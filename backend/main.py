@@ -190,14 +190,12 @@ async def extract_get_info():
 
 @app.post("/api/v1/media-query", tags=["Downloader"])
 async def extract_media(
-    request: Request,
-    url: str = Form(...),
-    userId: Optional[str] = Form(None)
+    request_data: ExtractRequest,
+    request: Request
 ):
     try:
-        # Sanitize input
-        target_url = url.strip()
-        user_id = userId
+        target_url = request_data.url
+        user_id = request_data.userId
         
         platform = _get_platform(target_url)
         client_ip = request.client.host if request.client else "unknown"

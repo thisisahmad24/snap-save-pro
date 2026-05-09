@@ -65,12 +65,14 @@ export default function Home() {
       formData.append("url", url);
       if (user?.id) formData.append("userId", user.id);
 
-      // Use the Vercel Proxy path to avoid ALL CORS issues and browser blocking
       const response = await fetch('/api/proxy/v1/media-query', {
         method: "POST",
         mode: "cors",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: formData.toString(),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          url,
+          userId: user?.id || null 
+        }),
       });
 
       const data = await response.json();
