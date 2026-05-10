@@ -215,9 +215,9 @@ async def extract_media(
         if result.get("success"):
             # Update quota after successful extraction
             if user_id:
-                update_user_quota(user_id, platform)
+                increment_user_quota(user_id, platform)
             else:
-                update_guest_quota(client_ip)
+                increment_guest_quota(client_ip)
                 
         return result
 
