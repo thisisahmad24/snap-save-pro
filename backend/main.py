@@ -172,17 +172,6 @@ async def health():
         "supabase": "connected" if supabase else "disconnected"
     }
 
-@app.options("/api/v1/media-query")
-async def extract_options():
-    from fastapi.responses import Response
-    return Response(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-        },
-    )
 
 @app.get("/api/v1/media-query", tags=["Downloader"])
 async def extract_get_info():
