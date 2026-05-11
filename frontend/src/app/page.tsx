@@ -87,7 +87,9 @@ export default function Home() {
       saveRecent(data);
     } catch (err: any) {
       console.error("Extraction error:", err);
-      setError(`Network Error: ${err.message || "Unknown error"}. Check console for details.`);
+      // Stringify the error so the user doesn't see [object Object]
+      const errorStr = typeof err === 'object' ? JSON.stringify(err) : String(err);
+      setError(`Network Error Details: ${errorStr}. Check console.`);
     } finally {
       setLoading(false);
     }
