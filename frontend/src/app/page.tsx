@@ -56,40 +56,53 @@ export default function Home() {
     setLimitReached(false);
 
     try {
-      let apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      // Sanitize URL: remove trailing slashes and whitespace
-      apiUrl = apiUrl.trim().replace(/\/+$/, "");
-      
-      // Use URLSearchParams to send a 'Simple Request' which avoids CORS preflight checks
-      const formData = new URLSearchParams();
-      formData.append("url", url);
-      if (user?.id) formData.append("userId", user.id);
+      // 1. Try Direct Public Extraction First (Bypasses all server issues)
+      const publicApi = "https://api.cobalt.tools/api/json";
+      try {
+        const cobaltResponse = await fetch(publicApi, {
+          method: "POST",
+          headers: { 
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ url })
+        });
+        if (cobaltResponse.ok) {
+          const cobaltData = await cobaltResponse.json();
+          if (cobaltData.url) {
+            const resultData = {
+              success: true,
+              title: "Downloaded Media",
+              thumbnail: "",
+              download_url: cobaltData.url,
+              platform: url.includes("instagram") ? "instagram" : "youtube",
+              ext: "mp4"
+            };
+            setResult(resultData);
+            saveRecent(resultData);
+            return;
+          }
+        }
+      } catch (e) {
+        console.log("Direct extraction failed, falling back to server...", e);
+      }
 
+      // 2. Fallback to your Render Server via Proxy
       const response = await fetch('/api/proxy/v1/media-query', {
         method: "POST",
-        mode: "cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          url,
-          userId: user?.id || null 
-        }),
+        body: JSON.stringify({ url, userId: user?.id || null }),
       });
-
       const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 403) {
-          setLimitReached(true);
-          throw new Error("🚀 Limit Reached! You've used your free downloads for today.");
-        }
-        throw new Error(data.detail || "Extraction failed");
+      if (data.success) {
+        setResult(data);
+        saveRecent(data);
+      } else {
+        setError(data.error || "Could not fetch media.");
       }
-      setResult(data);
-      saveRecent(data);
     } catch (err: any) {
       console.error("Extraction error:", err);
-      // Stringify the error so the user doesn't see [object Object]
-      const errorStr = typeof err === 'object' ? JSON.stringify(err) : String(err);
-      setError(`Network Error Details: ${errorStr}. Check console.`);
+      setError("Extraction failed. Please try a different link or check your connection.");
     } finally {
       setLoading(false);
     }
