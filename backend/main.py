@@ -69,14 +69,18 @@ def _get_platform(url: str) -> str:
 
 def check_user_quota(user_id: str, platform: str) -> bool:
     """Returns True if user is allowed to download, False if limit reached."""
-    resp = supabase.table("profiles").select(
-        "is_pro, download_count_ig, download_count_yt, last_reset_date"
-    ).eq("id", user_id).single().execute()
+    try:
+        resp = supabase.table("profiles").select(
+            "is_pro, download_count_ig, download_count_yt, last_reset_date"
+        ).eq("id", user_id).single().execute()
 
-    if not resp.data:
-        return True  # new user — allow
-
-    profile = resp.data
+        if not resp.data:
+            return True  # new user — allow
+            
+        profile = resp.data
+    except Exception as e:
+        logger.error(f"Supabase Quota Check Error (Database might be paused): {e}")
+        return True # Fallback: allow download if DB is down
 
     # Pro users have no limits
     if profile.get("is_pro"):
