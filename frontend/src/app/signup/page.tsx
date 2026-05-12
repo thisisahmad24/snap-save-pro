@@ -53,7 +53,7 @@ export default function Signup() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      
+
       <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4rem 2rem' }}>
         <section style={{
           width: '100%',
@@ -75,52 +75,52 @@ export default function Signup() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                 <label style={{ fontSize: '0.9rem', fontWeight: 700, opacity: 0.8 }}>Full Name</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. Ahmad Khan" 
+                <input
+                  type="text"
+                  placeholder="your name here"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  required 
-                  style={{ padding: '1rem 1.25rem', borderRadius: '1rem', backgroundColor: 'var(--background)', border: '1px solid var(--border)', color: 'white', outline: 'none', fontSize: '1rem' }} 
+                  required
+                  style={{ padding: '1rem 1.25rem', borderRadius: '1rem', backgroundColor: 'var(--background)', border: '1px solid var(--border)', color: 'white', outline: 'none', fontSize: '1rem' }}
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                 <label style={{ fontSize: '0.9rem', fontWeight: 700, opacity: 0.8 }}>Username</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. ahmad_pro" 
+                <input
+                  type="text"
+                  placeholder="username@xx"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  required 
-                  style={{ padding: '1rem 1.25rem', borderRadius: '1rem', backgroundColor: 'var(--background)', border: '1px solid var(--border)', color: 'white', outline: 'none', fontSize: '1rem' }} 
+                  required
+                  style={{ padding: '1rem 1.25rem', borderRadius: '1rem', backgroundColor: 'var(--background)', border: '1px solid var(--border)', color: 'white', outline: 'none', fontSize: '1rem' }}
                 />
               </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <label style={{ fontSize: '0.9rem', fontWeight: 700, opacity: 0.8 }}>Email Address</label>
-              <input 
-                type="email" 
-                placeholder="name@example.com" 
+              <input
+                type="email"
+                placeholder="mail@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required 
-                style={{ padding: '1rem 1.25rem', borderRadius: '1rem', backgroundColor: 'var(--background)', border: '1px solid var(--border)', color: 'white', outline: 'none', fontSize: '1rem' }} 
+                required
+                style={{ padding: '1rem 1.25rem', borderRadius: '1rem', backgroundColor: 'var(--background)', border: '1px solid var(--border)', color: 'white', outline: 'none', fontSize: '1rem' }}
               />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <label style={{ fontSize: '0.9rem', fontWeight: 700, opacity: 0.8 }}>Secure Password</label>
               <div style={{ position: 'relative' }}>
-                <input 
-                  type={showPassword ? "text" : "password"} 
-                  placeholder="At least 8 characters" 
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="At least 8 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required 
-                  style={{ width: '100%', padding: '1rem 3.5rem 1rem 1.25rem', borderRadius: '1rem', backgroundColor: 'var(--background)', border: '1px solid var(--border)', color: 'white', outline: 'none', fontSize: '1rem' }} 
+                  required
+                  style={{ width: '100%', padding: '1rem 3.5rem 1rem 1.25rem', borderRadius: '1rem', backgroundColor: 'var(--background)', border: '1px solid var(--border)', color: 'white', outline: 'none', fontSize: '1rem' }}
                 />
-                <button 
+                <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', opacity: 0.5, padding: '0.5rem' }}
@@ -138,7 +138,7 @@ export default function Signup() {
                   { id: 'pro', label: 'Pro (300/mo)' },
                   { id: 'custom', label: 'Enterprise' }
                 ].map((p) => (
-                  <button 
+                  <button
                     key={p.id}
                     type="button"
                     onClick={() => setPlan(p.id)}
