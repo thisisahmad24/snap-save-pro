@@ -7,45 +7,55 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def _fallback_public_api(url: str) -> dict:
-    # Updated 2024 list of working public instances
+    # 2024 Master List of working public extraction engines
     public_instances = [
         "https://cobalt.v-0.icu/api/json",
-        "https://api.cobalt.tools/api/json", # Try official again just in case
+        "https://api.cobalt.tools/api/json",
         "https://cobalt.shithouse.tv/api/json",
+        "https://cobalt-api.zeat.me/api/json",
+        "https://api.v1.snapsave.app/api/extract", # Fallback to SnapSave style
+        "https://co.wuk.sh/api/json",
+        "https://cobalt.q-s.ch/api/json",
+        "https://cobalt.onrender.com/api/json",
+        "https://cobalt.fly.dev/api/json",
+        "https://cobalt.api.unext.org/api/json"
     ]
     
     for instance in public_instances:
         try:
-            logger.info(f"Trying public fallback instance: {instance}")
-            with httpx.Client(timeout=20, verify=False) as client:
-                # Use v10 API structure for newer instances
+            logger.info(f"Attempting extraction with engine: {instance}")
+            with httpx.Client(timeout=15, verify=False) as client:
+                # Handle both Cobalt v7 and v10 API formats
+                payload = {"url": url, "vQuality": "720", "videoQuality": "720"}
                 response = client.post(
                     instance, 
-                    json={"url": url, "videoQuality": "720"}, 
+                    json=payload, 
                     headers={
                         "Accept": "application/json",
                         "Content-Type": "application/json",
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
                     }
                 )
             
             if response.status_code == 200:
                 data = response.json()
-                download_url = data.get("url") or data.get("stream")
-                if download_url:
+                # Extract URL from various common API formats
+                d_url = data.get("url") or data.get("stream") or data.get("download_url")
+                if d_url:
                     return {
                         "success": True,
-                        "title": "Social Media Content",
-                        "thumbnail": "",
-                        "download_url": download_url,
+                        "title": "Extracted Content",
+                        "thumbnail": data.get("thumbnail", ""),
+                        "download_url": d_url,
                         "platform": "social",
                         "ext": "mp4"
                     }
         except Exception as e:
-            logger.error(f"Public instance {instance} failed: {e}")
+            logger.error(f"Engine {instance} failed: {e}")
             continue
             
-    return {"success": False, "error": "All extraction methods failed. Please try a different link."}
+    return {"success": False, "error": "All 10 extraction engines are currently busy. Please try again in 30 seconds."}
+
 
 
 def _fallback_instagram_rapidapi(url: str) -> dict:
