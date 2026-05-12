@@ -7,38 +7,46 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def _fallback_public_api(url: str) -> dict:
-    # A list of public, free Cobalt instances that don't require keys
+    # Updated 2024 list of working public instances
     public_instances = [
-        "https://api.cobalt.tools/api/json",
-        "https://cobalt.api.unext.org/api/json",
-        "https://cobalt-api.zeat.me/api/json",
+        "https://cobalt.v-0.icu/api/json",
+        "https://api.cobalt.tools/api/json", # Try official again just in case
+        "https://cobalt.shithouse.tv/api/json",
     ]
     
     for instance in public_instances:
         try:
             logger.info(f"Trying public fallback instance: {instance}")
-            with httpx.Client(timeout=15) as client:
+            with httpx.Client(timeout=20, verify=False) as client:
+                # Use v10 API structure for newer instances
                 response = client.post(
                     instance, 
-                    json={"url": url}, 
-                    headers={"Accept": "application/json", "Content-Type": "application/json"}
+                    json={"url": url, "videoQuality": "720"}, 
+                    headers={
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    }
                 )
-            data = response.json()
             
-            if data.get("status") == "stream" or data.get("url"):
-                return {
-                    "success": True,
-                    "title": "Downloaded Content",
-                    "thumbnail": "", # Cobalt doesn't always provide thumbs
-                    "download_url": data.get("url"),
-                    "platform": "social",
-                    "ext": "mp4"
-                }
+            if response.status_code == 200:
+                data = response.json()
+                download_url = data.get("url") or data.get("stream")
+                if download_url:
+                    return {
+                        "success": True,
+                        "title": "Social Media Content",
+                        "thumbnail": "",
+                        "download_url": download_url,
+                        "platform": "social",
+                        "ext": "mp4"
+                    }
         except Exception as e:
             logger.error(f"Public instance {instance} failed: {e}")
             continue
             
-    return {"success": False, "error": "All free extraction methods failed. Instagram/YouTube are blocking the connection."}
+    return {"success": False, "error": "All extraction methods failed. Please try a different link."}
+
 
 def _fallback_instagram_rapidapi(url: str) -> dict:
     rapid_key = os.getenv("RAPIDAPI_KEY")
