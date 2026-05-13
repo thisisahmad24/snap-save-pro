@@ -58,13 +58,10 @@ def increment_guest_quota(ip: str):
 # Authenticated user quota helpers
 # ─────────────────────────────────────────────
 IG_DAILY_LIMIT = 5
-YT_DAILY_LIMIT = 3
 
 def _get_platform(url: str) -> str:
     if "instagram.com" in url:
         return "instagram"
-    if "youtube.com" in url or "youtu.be" in url:
-        return "youtube"
     return "unknown"
 
 def check_user_quota(user_id: str, platform: str) -> bool:
@@ -102,8 +99,6 @@ def check_user_quota(user_id: str, platform: str) -> bool:
     count_yt = profile.get("download_count_yt", 0)
 
     if platform == "instagram" and count_ig >= IG_DAILY_LIMIT:
-        return False
-    if platform == "youtube" and count_yt >= YT_DAILY_LIMIT:
         return False
 
     return True
@@ -143,7 +138,7 @@ def increment_user_quota(user_id: str, platform: str):
 # Request model with URL validation
 # ─────────────────────────────────────────────
 SUPPORTED_DOMAINS = re.compile(
-    r"(instagram\.com|youtube\.com|youtu\.be)", re.IGNORECASE
+    r"(instagram\.com)", re.IGNORECASE
 )
 
 class ExtractRequest(BaseModel):

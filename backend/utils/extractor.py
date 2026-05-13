@@ -161,12 +161,6 @@ def extract_media_info(url: str) -> dict:
         "skip_download": True,
         "noplaylist": True,
         "socket_timeout": 20,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["web", "mweb", "ios"],
-                "player_skip": ["webpage", "configs"]
-            }
-        }
     }
 
 
@@ -174,13 +168,8 @@ def extract_media_info(url: str) -> dict:
     # Use cookies if provided in environment variables to bypass login walls
     cookie_file = None
     ig_cookies = os.getenv("INSTAGRAM_COOKIES")
-    yt_cookies = os.getenv("YOUTUBE_COOKIES")
     
-    selected_cookies = None
-    if "instagram.com" in url.lower():
-        selected_cookies = ig_cookies
-    elif "youtube.com" in url.lower() or "youtu.be" in url.lower():
-        selected_cookies = yt_cookies
+    selected_cookies = ig_cookies
 
     if selected_cookies:
         import tempfile

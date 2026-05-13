@@ -133,7 +133,7 @@ export default function Home() {
             )}
           </h1>
           <p style={{ fontSize: '1.25rem', opacity: 0.6, maxWidth: '600px', margin: '0 auto 3rem auto' }}>
-            Download high-quality reels, photos, and videos from Instagram and YouTube in seconds. No ads, no hassle.
+            Download high-quality reels, photos, and videos from Instagram in seconds. No ads, no hassle.
           </p>
 
           <form onSubmit={handleExtract} style={{
@@ -149,7 +149,7 @@ export default function Home() {
           }}>
             <input
               type="text"
-              placeholder="Paste Instagram or YouTube link here..."
+              placeholder="Paste Instagram link here (Reels, Video, Post)..."
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               style={{
