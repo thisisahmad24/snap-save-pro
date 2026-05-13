@@ -56,53 +56,23 @@ export default function Home() {
     setLimitReached(false);
 
     try {
-      // 1. Try Direct Public Extraction First (Bypasses all server issues)
-      const publicApi = "https://api.cobalt.tools/api/json";
-      try {
-        const cobaltResponse = await fetch(publicApi, {
-          method: "POST",
-          headers: { 
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ url })
-        });
-        if (cobaltResponse.ok) {
-          const cobaltData = await cobaltResponse.json();
-          if (cobaltData.url) {
-            const resultData = {
-              success: true,
-              title: "Downloaded Media",
-              thumbnail: "",
-              download_url: cobaltData.url,
-              platform: url.includes("instagram") ? "instagram" : "youtube",
-              ext: "mp4"
-            };
-            setResult(resultData);
-            saveRecent(resultData);
-            return;
-          }
-        }
-      } catch (e) {
-        console.log("Direct extraction failed, falling back to server...", e);
-      }
-
-      // 2. Fallback to your Render Server via Proxy
-      const response = await fetch('/api/proxy/v1/media-query', {
+      // Call our local Vercel API route (No CORS issues, super fast)
+      const response = await fetch('/api/extract', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url, userId: user?.id || null }),
       });
+      
       const data = await response.json();
       if (data.success) {
         setResult(data);
         saveRecent(data);
       } else {
-        setError(data.error || "Could not fetch media.");
+        setError(data.error || "Could not fetch media. Please try another link.");
       }
     } catch (err: any) {
       console.error("Extraction error:", err);
-      setError("Extraction failed. Please try a different link or check your connection.");
+      setError("Extraction failed. Please check your internet connection.");
     } finally {
       setLoading(false);
     }
