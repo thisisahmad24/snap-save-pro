@@ -7,26 +7,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def _fallback_public_api(url: str) -> dict:
-    # 2024 Master List of working public extraction engines
+    # 2026 Master List of working public extraction engines (strictly open Cobalt v10 instances)
     public_instances = [
-        "https://cobalt.v-0.icu/api/json",
-        "https://api.cobalt.tools/api/json",
-        "https://cobalt.shithouse.tv/api/json",
-        "https://cobalt-api.zeat.me/api/json",
-        "https://api.v1.snapsave.app/api/extract", # Fallback to SnapSave style
-        "https://co.wuk.sh/api/json",
-        "https://cobalt.q-s.ch/api/json",
-        "https://cobalt.onrender.com/api/json",
-        "https://cobalt.fly.dev/api/json",
-        "https://cobalt.api.unext.org/api/json"
+        "https://dog.kittycat.boo/",
+        "https://cobaltapi.squair.xyz/",
+        "https://api.dl.woof.monster/",
+        "https://api.cobalt.liubquanti.click/",
+        "https://cobaltapi.kittycat.boo/",
+        "https://fox.kittycat.boo/"
     ]
     
     for instance in public_instances:
         try:
             logger.info(f"Attempting extraction with engine: {instance}")
             with httpx.Client(timeout=15, verify=False) as client:
-                # Handle both Cobalt v7 and v10 API formats
-                payload = {"url": url, "vQuality": "720", "videoQuality": "720"}
+                payload = {"url": url, "videoQuality": "720"}
                 response = client.post(
                     instance, 
                     json=payload, 
@@ -39,22 +34,25 @@ def _fallback_public_api(url: str) -> dict:
             
             if response.status_code == 200:
                 data = response.json()
-                # Extract URL from various common API formats
-                d_url = data.get("url") or data.get("stream") or data.get("download_url")
+                picker = data.get("picker")
+                first_picker = picker[0] if (picker and isinstance(picker, list) and len(picker) > 0) else {}
+                
+                d_url = data.get("url") or data.get("stream") or first_picker.get("url")
                 if d_url:
+                    is_photo = first_picker.get("type") == "photo"
                     return {
                         "success": True,
-                        "title": "Extracted Content",
-                        "thumbnail": data.get("thumbnail", ""),
+                        "title": data.get("filename") or "Extracted Content",
+                        "thumbnail": data.get("thumbnail") or first_picker.get("thumb") or "",
                         "download_url": d_url,
                         "platform": "social",
-                        "ext": "mp4"
+                        "ext": "jpg" if is_photo else "mp4"
                     }
         except Exception as e:
             logger.error(f"Engine {instance} failed: {e}")
             continue
             
-    return {"success": False, "error": "All 10 extraction engines are currently busy. Please try again in 30 seconds."}
+    return {"success": False, "error": "All 6 extraction engines are currently busy. Please try again in 30 seconds."}
 
 
 
