@@ -2,21 +2,50 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const { url } = await request.json();
+    const { url, userId } = await request.json();
     
     if (!url) {
       return NextResponse.json({ success: false, error: "URL is required" }, { status: 400 });
     }
 
-    // List of working public extraction engines (v10 compatible)
+    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
+    
+    // 1. Attempt to call the Python backend first for full quota tracking, db logging, and extraction
+    try {
+      console.log(`Forwarding extraction request to backend: ${backendUrl}/api/v1/media-query`);
+      const response = await fetch(`${backendUrl}/api/v1/media-query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, userId }),
+        // Timeout after 15 seconds for backend response
+        signal: AbortSignal.timeout(15000)
+      });
+      
+      const data = await response.json();
+      if (response.ok && data.success) {
+        return NextResponse.json(data);
+      } else if (data.error && data.error.includes("limit reached")) {
+        // Quota limit hit: return immediately so monetization works
+        return NextResponse.json(data);
+      }
+      console.warn("Backend extraction unsuccessful, attempting local scraping fallback...", data);
+    } catch (backendError) {
+      console.error("FastAPI Backend connection failed or timed out, falling back to Next.js direct scraping:", backendError);
+    }
+
+    // 2. FALLBACK: Direct scraping via 2026 working public Cobalt v10 engines (strictly Turnstile-free open instances)
     const engines = [
-      "https://cobalt.v-0.icu/api/json",
-      "https://api.cobalt.tools/api/json",
-      "https://cobalt.shithouse.tv/api/json",
+      "https://dog.kittycat.boo/",
+      "https://cobaltapi.squair.xyz/",
+      "https://api.dl.woof.monster/",
+      "https://api.cobalt.liubquanti.click/",
+      "https://cobaltapi.kittycat.boo/",
+      "https://fox.kittycat.boo/"
     ];
 
     for (const engine of engines) {
       try {
+        console.log(`Attempting direct extraction with engine: ${engine}`);
         const response = await fetch(engine, {
           method: 'POST',
           headers: {
@@ -31,20 +60,24 @@ export async function POST(request: Request) {
 
         if (response.ok) {
           const data = await response.json();
-          const downloadUrl = data.url || data.stream;
+          const picker = data.picker;
+          const firstPicker = picker && Array.isArray(picker) && picker.length > 0 ? picker[0] : {};
+          const downloadUrl = data.url || data.stream || firstPicker.url;
+          
           if (downloadUrl) {
+            const isPhoto = firstPicker.type === "photo";
             return NextResponse.json({
               success: true,
-              title: "Instagram Content",
-              thumbnail: data.thumbnail || "",
+              title: data.filename || "Instagram Content",
+              thumbnail: data.thumbnail || firstPicker.thumb || "",
               download_url: downloadUrl,
               platform: "instagram",
-              ext: "mp4"
+              ext: isPhoto ? "jpg" : "mp4"
             });
           }
         }
       } catch (e) {
-        console.error(`Engine ${engine} failed:`, e);
+        console.error(`Local scraping engine ${engine} failed:`, e);
         continue;
       }
     }
