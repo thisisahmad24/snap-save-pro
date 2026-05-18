@@ -4,12 +4,16 @@ from pydantic import BaseModel, HttpUrl, validator
 import os
 import re
 import time
+import logging
 from datetime import date, datetime, timezone
 from collections import defaultdict
 from dotenv import load_dotenv
 from utils.extractor import extract_media_info
 from supabase import create_client, Client
 from typing import Optional
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
