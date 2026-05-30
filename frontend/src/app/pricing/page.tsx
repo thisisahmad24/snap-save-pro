@@ -4,31 +4,31 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { supabase } from "@/lib/supabase";
+// TODO: Replace with MongoDB custom auth API call
+// import { getAuthUser, fetchUserUsage } from "@/lib/auth";
 
 export default function Pricing() {
   const [user, setUser] = useState<any>(null);
   const [usage, setUsage] = useState({ ig: 0, yt: 0 });
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        fetchUsage(session.user.id);
-      }
-    });
-  }, []);
+    // TODO: Replace with JWT token check & usage fetch from MongoDB
+    // const token = localStorage.getItem("snap_token");
+    // if (token) {
+    //   fetch("/api/auth/usage", { headers: { Authorization: `Bearer ${token}` } })
+    //     .then(res => res.json())
+    //     .then(data => { setUser(data.user); setUsage(data.usage); });
+    // }
 
-  const fetchUsage = async (userId: string) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('download_count_ig, download_count_yt')
-      .eq('id', userId)
-      .single();
-    if (data) {
-      setUsage({ ig: data.download_count_ig || 0, yt: data.download_count_yt || 0 });
+    const storedUser = localStorage.getItem("snap_user");
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch {
+        setUser(null);
+      }
     }
-  };
+  }, []);
 
   const plans = [
     {

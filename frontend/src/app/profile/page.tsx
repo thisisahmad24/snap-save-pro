@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { supabase } from "@/lib/supabase";
+// TODO: Replace with MongoDB custom auth API call
+// import { getAuthUser, updateProfile } from "@/lib/auth";
 
 export default function Profile() {
   const [user, setUser] = useState<any>(null);
@@ -20,27 +21,33 @@ export default function Profile() {
   const router = useRouter();
 
   useEffect(() => {
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push("/login");
-        return;
-      }
-      setUser(session.user);
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-      
-      if (!error && data) {
-        setProfile(data);
-      }
-      setLoading(false);
-    };
+    // TODO: Replace with JWT token validation & profile fetch from MongoDB
+    // const token = localStorage.getItem("snap_token");
+    // if (!token) { router.push("/login"); return; }
+    // fetch("/api/auth/profile", { headers: { Authorization: `Bearer ${token}` } })
+    //   .then(res => res.json())
+    //   .then(data => { setUser(data.user); setProfile(data.profile); setLoading(false); })
+    //   .catch(() => { router.push("/login"); });
 
-    checkUser();
+    const storedUser = localStorage.getItem("snap_user");
+    if (!storedUser) {
+      router.push("/login");
+      return;
+    }
+    try {
+      const parsed = JSON.parse(storedUser);
+      setUser(parsed);
+      setProfile({
+        full_name: parsed.full_name || "",
+        username: parsed.username || "",
+        country: parsed.country || "",
+        avatar_url: parsed.avatar_url || "",
+        is_pro: parsed.is_pro || false,
+      });
+    } catch {
+      router.push("/login");
+    }
+    setLoading(false);
   }, [router]);
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -54,19 +61,16 @@ export default function Profile() {
     setMessage("");
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: profile.full_name,
-          username: profile.username,
-          country: profile.country,
-          avatar_url: profile.avatar_url,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id);
+      // TODO: Replace with PUT/PATCH to /api/auth/profile (MongoDB)
+      // const token = localStorage.getItem("snap_token");
+      // const res = await fetch("/api/auth/profile", {
+      //   method: "PUT",
+      //   headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      //   body: JSON.stringify({ full_name: profile.full_name, username: profile.username, country: profile.country, avatar_url: profile.avatar_url }),
+      // });
+      // if (!res.ok) throw new Error("Update failed");
 
-      if (error) throw error;
-      setMessage("Profile updated successfully!");
+      setMessage("Profile update coming soon. MongoDB backend is being set up.");
     } catch (err: any) {
       setMessage("Error: " + err.message);
     } finally {
@@ -143,7 +147,7 @@ export default function Profile() {
               <label style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.7 }}>Email (Private)</label>
               <input 
                 type="email" 
-                value={user.email} 
+                value={user?.email || ""} 
                 disabled
                 style={{ padding: '0.8rem', borderRadius: '0.75rem', backgroundColor: 'var(--background)', border: '1px solid var(--border)', color: 'white', opacity: 0.5 }} 
               />
