@@ -3,48 +3,33 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+
+// TODO: Replace with JWT-based auth check once MongoDB auth is implemented
+// import { getAuthUser, logout } from "@/lib/auth";
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null);
   const pathname = usePathname();
 
   useEffect(() => {
-    const fetchProfile = async (userId: string) => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('full_name, username')
-        .eq('id', userId)
-        .single();
-      
-      if (!error && data) {
-        setUser((prev: any) => ({ ...prev, profile: data }));
-      }
-    };
-
-    // Check initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        fetchProfile(session.user.id);
-      }
-    });
-
-    // Listen for changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        fetchProfile(session.user.id);
-      } else {
+    // TODO: Replace with real auth token check (JWT from localStorage or cookie)
+    // Example: const user = getAuthUser(); setUser(user);
+    const storedUser = localStorage.getItem("snap_user");
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch {
         setUser(null);
       }
-    });
-
-    return () => subscription.unsubscribe();
+    }
   }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = () => {
+    // TODO: Replace with JWT logout (clear token from localStorage/cookie)
+    localStorage.removeItem("snap_user");
+    localStorage.removeItem("snap_token");
+    setUser(null);
+    window.location.href = "/";
   };
 
   const navLinks = [
@@ -124,7 +109,7 @@ export default function Navbar() {
               borderRadius: '0.5rem',
               backgroundColor: 'rgba(255, 62, 62, 0.1)'
             }}>
-              @{user.profile?.username || user.profile?.full_name || user.email?.split('@')[0]}
+              @{user.username || user.full_name || user.email?.split('@')[0]}
             </Link>
             <button onClick={handleLogout} style={{
               padding: '0.6rem 1.2rem',

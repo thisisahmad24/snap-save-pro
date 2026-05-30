@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { supabase } from "@/lib/supabase";
+// TODO: Replace with MongoDB custom auth
+// import { getAuthUser } from "@/lib/auth";
 
 export default function Home() {
   const [url, setUrl] = useState("");
@@ -16,17 +17,25 @@ export default function Home() {
   const [recentDownloads, setRecentDownloads] = useState<any[]>([]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
+    // TODO: Replace with JWT token check from localStorage/cookie
+    // const token = localStorage.getItem("snap_token");
+    // if (token) {
+    //   fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+    //     .then(res => res.json())
+    //     .then(data => setUser(data.user));
+    // }
+
+    const storedUser = localStorage.getItem("snap_user");
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch {
+        setUser(null);
+      }
+    }
 
     const saved = localStorage.getItem("recent_downloads");
     if (saved) setRecentDownloads(JSON.parse(saved).slice(0, 5));
-
-    return () => subscription.unsubscribe();
   }, []);
 
   /**
@@ -97,7 +106,7 @@ export default function Home() {
         <section style={{ textAlign: 'center', marginTop: '4rem', marginBottom: '6rem' }} className="animate-fade-in">
           <h1 style={{ fontSize: '4.5rem', fontWeight: 900, marginBottom: '1.5rem', lineHeight: 1.1 }}>
             {user ? (
-              <>Welcome Back, <span style={{ color: 'var(--primary)' }}>{user.user_metadata?.full_name || user.email?.split('@')[0]}</span></>
+              <>Welcome Back, <span style={{ color: 'var(--primary)' }}>{user.full_name || user.username || user.email?.split('@')[0]}</span></>
             ) : (
               <>Save Content Like a <span style={{ color: 'var(--primary)' }}>PRO</span></>
             )}
