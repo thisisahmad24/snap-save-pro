@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { supabase } from "@/lib/supabase";
+// TODO: Replace with MongoDB custom auth API call
+// import { registerUser } from "@/lib/auth";
 
 export default function Signup() {
   const [email, setEmail] = useState("");
@@ -28,21 +29,17 @@ export default function Signup() {
     setMessage("");
 
     try {
-      const { error: signupError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            username: username,
-            plan: plan
-          }
-        }
-      });
+      // TODO: Replace with POST to /api/auth/register (MongoDB custom auth)
+      // const res = await fetch("/api/auth/register", {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify({ email, password, full_name: fullName, username, plan }),
+      // });
+      // const data = await res.json();
+      // if (!res.ok) throw new Error(data.message || "Signup failed");
+      // setMessage("Account created! Please log in.");
 
-      if (signupError) throw signupError;
-
-      setMessage("Success! Please check your email for a confirmation link.");
+      setMessage("Sign-up coming soon. MongoDB auth is being set up.");
     } catch (err: any) {
       setError(err.message || "Failed to create account");
     } finally {

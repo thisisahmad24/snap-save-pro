@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { supabase } from "@/lib/supabase";
+// TODO: Replace with MongoDB custom auth API call
+// import { loginUser } from "@/lib/auth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -25,14 +26,19 @@ export default function Login() {
     setError("");
 
     try {
-      const { error: loginError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // TODO: Replace with POST to /api/auth/login (MongoDB custom auth)
+      // const res = await fetch("/api/auth/login", {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify({ email, password }),
+      // });
+      // const data = await res.json();
+      // if (!res.ok) throw new Error(data.message || "Login failed");
+      // localStorage.setItem("snap_token", data.token);
+      // localStorage.setItem("snap_user", JSON.stringify(data.user));
+      // router.push("/");
 
-      if (loginError) throw loginError;
-
-      router.push("/"); // Redirect to home on success
+      setError("Login coming soon. MongoDB auth is being set up.");
     } catch (err: any) {
       setError(err.message || "Invalid email or password");
     } finally {
