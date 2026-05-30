@@ -9,8 +9,10 @@ from datetime import date, datetime, timezone
 from collections import defaultdict
 from dotenv import load_dotenv
 from utils.extractor import extract_media_info
-from supabase import create_client, Client
 from typing import Optional
+
+# TODO: Add MongoDB imports once connection is set up
+# from pymongo import MongoClient
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,11 +33,12 @@ app.add_middleware(
 )
 
 # ─────────────────────────────────────────────
-# Supabase
+# MongoDB (TODO: configure connection)
 # ─────────────────────────────────────────────
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
-supabase: Client = create_client(supabase_url, supabase_key)
+# MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+# mongo_client = MongoClient(MONGO_URI)
+# db = mongo_client["snapsave"]
+# profiles_collection = db["profiles"]
 
 # ─────────────────────────────────────────────
 # Guest IP rate limiting (in-memory)
@@ -70,73 +73,36 @@ def _get_platform(url: str) -> str:
 
 def check_user_quota(user_id: str, platform: str) -> bool:
     """Returns True if user is allowed to download, False if limit reached."""
-    try:
-        resp = supabase.table("profiles").select(
-            "is_pro, download_count_ig, download_count_yt, last_reset_date"
-        ).eq("id", user_id).single().execute()
+    # TODO: Replace with MongoDB query
+    # profile = profiles_collection.find_one({"_id": user_id})
+    # if not profile:
+    #     return True  # new user — allow
+    # if profile.get("is_pro"):
+    #     return True
+    # today = str(date.today())
+    # if profile.get("last_reset_date") != today:
+    #     profiles_collection.update_one(
+    #         {"_id": user_id},
+    #         {"$set": {"download_count_ig": 0, "download_count_yt": 0, "last_reset_date": today}}
+    #     )
+    #     return True
+    # if platform == "instagram" and profile.get("download_count_ig", 0) >= IG_DAILY_LIMIT:
+    #     return False
+    # return True
 
-        if not resp.data:
-            return True  # new user — allow
-            
-        profile = resp.data
-    except Exception as e:
-        logger.error(f"Supabase Quota Check Error (Database might be paused): {e}")
-        return True # Fallback: allow download if DB is down
-
-    # Pro users have no limits
-    if profile.get("is_pro"):
-        return True
-
-    # ── Daily reset ─────────────────────────────
-    today = str(date.today())
-    last_reset = profile.get("last_reset_date", "")
-    if last_reset != today:
-        # Reset counters for a new day
-        supabase.table("profiles").update({
-            "download_count_ig": 0,
-            "download_count_yt": 0,
-            "last_reset_date": today
-        }).eq("id", user_id).execute()
-        return True  # after reset, quota is fresh
-
-    count_ig = profile.get("download_count_ig", 0)
-    count_yt = profile.get("download_count_yt", 0)
-
-    if platform == "instagram" and count_ig >= IG_DAILY_LIMIT:
-        return False
-
+    # Fallback: allow all downloads until MongoDB is configured
     return True
 
 def increment_user_quota(user_id: str, platform: str):
-    """Safely increments the appropriate counter using a fetch-then-update.
-    For production atomicity, replace with a Supabase RPC (see schema.sql).
+    """Safely increments the appropriate counter.
+    TODO: Replace with MongoDB update once connection is configured.
     """
-    field = "download_count_ig" if platform == "instagram" else "download_count_yt"
-    today = str(date.today())
-
-    resp = supabase.table("profiles").select(
-        f"{field}, last_reset_date"
-    ).eq("id", user_id).single().execute()
-
-    if not resp.data:
-        return
-
-    last_reset = resp.data.get("last_reset_date", "")
-    current = resp.data.get(field, 0)
-
-    # Guard: if reset happened between check and increment, start from 1
-    if last_reset != today:
-        new_val = 1
-        supabase.table("profiles").update({
-            field: new_val,
-            "download_count_ig": 0 if field != "download_count_ig" else new_val,
-            "download_count_yt": 0 if field != "download_count_yt" else new_val,
-            "last_reset_date": today
-        }).eq("id", user_id).execute()
-    else:
-        supabase.table("profiles").update(
-            {field: current + 1}
-        ).eq("id", user_id).execute()
+    # field = "download_count_ig" if platform == "instagram" else "download_count_yt"
+    # profiles_collection.update_one(
+    #     {"_id": user_id},
+    #     {"$inc": {field: 1}, "$set": {"last_reset_date": str(date.today())}}
+    # )
+    pass
 
 # ─────────────────────────────────────────────
 # Request model with URL validation
@@ -172,7 +138,7 @@ async def health():
     return {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "supabase": "connected" if supabase else "disconnected"
+        "database": "mongodb (pending configuration)"
     }
 
 
@@ -195,7 +161,7 @@ async def extract_media(
         # ── Quota check ──────────────────────────
         if user_id:
             if not check_user_quota(user_id, platform):
-                limit = IG_DAILY_LIMIT if platform == "instagram" else YT_DAILY_LIMIT
+                limit = IG_DAILY_LIMIT if platform == "instagram" else 0
                 return {"success": False, "error": f"Daily limit reached. Upgrade to PRO."}
         else:
             if not check_guest_quota(client_ip):
