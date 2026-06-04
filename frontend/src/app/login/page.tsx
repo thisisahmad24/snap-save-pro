@@ -5,8 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-// TODO: Replace with MongoDB custom auth API call
-// import { loginUser } from "@/lib/auth";
+import { saveSession } from "@/lib/session";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -26,19 +25,19 @@ export default function Login() {
     setError("");
 
     try {
-      // TODO: Replace with POST to /api/auth/login (MongoDB custom auth)
-      // const res = await fetch("/api/auth/login", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ email, password }),
-      // });
-      // const data = await res.json();
-      // if (!res.ok) throw new Error(data.message || "Login failed");
-      // localStorage.setItem("snap_token", data.token);
-      // localStorage.setItem("snap_user", JSON.stringify(data.user));
-      // router.push("/");
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-      setError("Login coming soon. MongoDB auth is being set up.");
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Login failed");
+      }
+
+      saveSession(data.token, data.user);
+      router.push("/");
     } catch (err: any) {
       setError(err.message || "Invalid email or password");
     } finally {

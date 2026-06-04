@@ -4,29 +4,37 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-// TODO: Replace with MongoDB custom auth API call
-// import { getAuthUser, fetchUserUsage } from "@/lib/auth";
+import { authHeaders, getStoredToken, getStoredUser, saveSession } from "@/lib/session";
 
 export default function Pricing() {
   const [user, setUser] = useState<any>(null);
   const [usage, setUsage] = useState({ ig: 0, yt: 0 });
 
   useEffect(() => {
-    // TODO: Replace with JWT token check & usage fetch from MongoDB
-    // const token = localStorage.getItem("snap_token");
-    // if (token) {
-    //   fetch("/api/auth/usage", { headers: { Authorization: `Bearer ${token}` } })
-    //     .then(res => res.json())
-    //     .then(data => { setUser(data.user); setUsage(data.usage); });
-    // }
+    const cachedUser = getStoredUser();
+    if (cachedUser) {
+      setUser(cachedUser);
+      setUsage({
+        ig: Number((cachedUser as any).download_count_ig || 0),
+        yt: Number((cachedUser as any).download_count_yt || 0),
+      });
+    }
 
-    const storedUser = localStorage.getItem("snap_user");
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        setUser(null);
-      }
+    const token = getStoredToken();
+    if (token) {
+      fetch("/api/auth/me", { headers: authHeaders() })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success && data.user) {
+            setUser(data.user);
+            setUsage({
+              ig: Number(data.user.download_count_ig || 0),
+              yt: Number(data.user.download_count_yt || 0),
+            });
+            saveSession(token, data.user);
+          }
+        })
+        .catch(() => null);
     }
   }, []);
 

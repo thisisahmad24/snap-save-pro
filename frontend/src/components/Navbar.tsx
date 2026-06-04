@@ -3,31 +3,38 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-
-// TODO: Replace with JWT-based auth check once MongoDB auth is implemented
-// import { getAuthUser, logout } from "@/lib/auth";
+import { authHeaders, clearSession, getStoredToken, getStoredUser, saveSession } from "@/lib/session";
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null);
   const pathname = usePathname();
 
   useEffect(() => {
-    // TODO: Replace with real auth token check (JWT from localStorage or cookie)
-    // Example: const user = getAuthUser(); setUser(user);
-    const storedUser = localStorage.getItem("snap_user");
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        setUser(null);
-      }
+    const cachedUser = getStoredUser();
+    if (cachedUser) {
+      setUser(cachedUser);
     }
+
+    const token = getStoredToken();
+    if (!token) {
+      return;
+    }
+
+    fetch("/api/auth/me", {
+      headers: authHeaders(),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success && data.user) {
+          saveSession(token, data.user);
+          setUser(data.user);
+        }
+      })
+      .catch(() => null);
   }, []);
 
   const handleLogout = () => {
-    // TODO: Replace with JWT logout (clear token from localStorage/cookie)
-    localStorage.removeItem("snap_user");
-    localStorage.removeItem("snap_token");
+    clearSession();
     setUser(null);
     window.location.href = "/";
   };

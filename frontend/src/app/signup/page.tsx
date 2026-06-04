@@ -4,8 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-// TODO: Replace with MongoDB custom auth API call
-// import { registerUser } from "@/lib/auth";
+import { saveSession } from "@/lib/session";
 
 export default function Signup() {
   const [email, setEmail] = useState("");
@@ -29,17 +28,22 @@ export default function Signup() {
     setMessage("");
 
     try {
-      // TODO: Replace with POST to /api/auth/register (MongoDB custom auth)
-      // const res = await fetch("/api/auth/register", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ email, password, full_name: fullName, username, plan }),
-      // });
-      // const data = await res.json();
-      // if (!res.ok) throw new Error(data.message || "Signup failed");
-      // setMessage("Account created! Please log in.");
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, full_name: fullName, username, plan }),
+      });
 
-      setMessage("Sign-up coming soon. MongoDB auth is being set up.");
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Signup failed");
+      }
+
+      saveSession(data.token, data.user);
+      setMessage("Account created! Redirecting to dashboard...");
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1000);
     } catch (err: any) {
       setError(err.message || "Failed to create account");
     } finally {

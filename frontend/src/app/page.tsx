@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-// TODO: Replace with MongoDB custom auth
-// import { getAuthUser } from "@/lib/auth";
+import { authHeaders, getStoredToken, getStoredUser, saveSession } from "@/lib/session";
 
 export default function Home() {
   const [url, setUrl] = useState("");
@@ -17,25 +16,38 @@ export default function Home() {
   const [recentDownloads, setRecentDownloads] = useState<any[]>([]);
 
   useEffect(() => {
-    // TODO: Replace with JWT token check from localStorage/cookie
-    // const token = localStorage.getItem("snap_token");
-    // if (token) {
-    //   fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
-    //     .then(res => res.json())
-    //     .then(data => setUser(data.user));
-    // }
-
-    const storedUser = localStorage.getItem("snap_user");
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        setUser(null);
-      }
+    const cachedUser = getStoredUser();
+    if (cachedUser) {
+      setUser(cachedUser);
     }
 
-    const saved = localStorage.getItem("recent_downloads");
-    if (saved) setRecentDownloads(JSON.parse(saved).slice(0, 5));
+    const token = getStoredToken();
+    if (token) {
+      fetch("/api/auth/me", { headers: authHeaders() })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success && data.user) {
+            saveSession(token, data.user);
+            setUser(data.user);
+          }
+        })
+        .catch(() => null);
+
+      fetch("/api/auth/me/downloads", { headers: authHeaders() })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.downloads)) {
+            setRecentDownloads(data.downloads.slice(0, 5));
+          }
+        })
+        .catch(() => {
+          const saved = localStorage.getItem("recent_downloads");
+          if (saved) setRecentDownloads(JSON.parse(saved).slice(0, 5));
+        });
+    } else {
+      const saved = localStorage.getItem("recent_downloads");
+      if (saved) setRecentDownloads(JSON.parse(saved).slice(0, 5));
+    }
   }, []);
 
   /**
@@ -78,7 +90,10 @@ export default function Home() {
       // Call our local Vercel API route (No CORS issues, super fast)
       const response = await fetch('/api/extract', {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+        },
         body: JSON.stringify({ url, userId: user?.id || null }),
       });
       

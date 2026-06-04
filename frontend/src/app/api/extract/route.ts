@@ -15,9 +15,13 @@ export async function POST(request: Request) {
     // 1. Attempt to call the Python backend first for full quota tracking, db logging, and extraction
     try {
       console.log(`Forwarding extraction request to backend: ${backendUrl}`);
+      const authorization = request.headers.get("authorization");
       const response = await fetch(backendUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(authorization ? { Authorization: authorization } : {}),
+        },
         body: JSON.stringify({ url, userId }),
         // Timeout after 15 seconds for backend response
         signal: AbortSignal.timeout(15000)

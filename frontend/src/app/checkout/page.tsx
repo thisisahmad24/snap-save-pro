@@ -4,8 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-// TODO: Replace with MongoDB custom auth API call
-// import { getAuthUser, upgradeToPro } from "@/lib/auth";
+import { authHeaders, getStoredToken, saveSession } from "@/lib/session";
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -25,22 +24,21 @@ function CheckoutContent() {
   const currentPlan = prices[plan] || prices.pro;
 
   useEffect(() => {
-    // TODO: Replace with JWT token validation
-    // const token = localStorage.getItem("snap_token");
-    // if (!token) { router.push("/login?redirect=/checkout?plan=" + plan); return; }
-    // fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
-    //   .then(res => res.json())
-    //   .then(data => setUser(data.user));
-
-    const storedUser = localStorage.getItem("snap_user");
-    if (!storedUser) {
+    const token = getStoredToken();
+    if (!token) {
       router.push("/login?redirect=/checkout?plan=" + plan);
     } else {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        router.push("/login");
-      }
+      fetch("/api/auth/me", { headers: authHeaders() })
+        .then((response) => response.json())
+        .then((data) => {
+          if (!data.success || !data.user) {
+            router.push("/login?redirect=/checkout?plan=" + plan);
+            return;
+          }
+          setUser(data.user);
+          saveSession(token, data.user);
+        })
+        .catch(() => router.push("/login"));
     }
   }, [router, plan]);
 
@@ -51,21 +49,27 @@ function CheckoutContent() {
     // Simulate payment delay
     setTimeout(async () => {
       try {
-        // TODO: Replace with POST to /api/auth/upgrade (MongoDB)
-        // const token = localStorage.getItem("snap_token");
-        // const res = await fetch("/api/auth/upgrade", {
-        //   method: "POST",
-        //   headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        //   body: JSON.stringify({ transaction_id: transactionId, plan }),
-        // });
-        // if (!res.ok) throw new Error("Payment verification failed");
+        const response = await fetch("/api/auth/upgrade", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeaders(),
+          },
+          body: JSON.stringify({ transaction_id: transactionId, plan }),
+        });
 
-        // For now, update localStorage
-        if (user) {
-          const updatedUser = { ...user, is_pro: true };
-          localStorage.setItem("snap_user", JSON.stringify(updatedUser));
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Payment verification failed");
         }
 
+        if (data.user) {
+          setUser(data.user);
+          const token = getStoredToken();
+          if (token) {
+            saveSession(token, data.user);
+          }
+        }
         setStatus("success");
         setTimeout(() => router.push("/"), 3000);
       } catch (err) {
