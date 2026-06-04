@@ -51,6 +51,16 @@ export default function Home() {
     });
   };
 
+  const getDownloadHref = (item: any) => {
+    const params = new URLSearchParams({
+      url: item.download_url,
+      title: item.title || "download",
+      ext: item.ext || "mp4",
+    });
+
+    return `/api/download?${params.toString()}`;
+  };
+
   /**
    * Handles the form submission to extract media from the provided URL.
    * Sends the URL to the backend API and handles quota limits and errors.
@@ -241,9 +251,10 @@ export default function Home() {
                 
                 <div style={{ display: 'flex', gap: '1rem' }}>
                   <a
-                    href={result.download_url}
+                    href={getDownloadHref(result)}
                     target="_blank"
                     rel="noopener noreferrer"
+                    download
                     style={{
                       flex: 1,
                       padding: '1.2rem',
@@ -299,7 +310,7 @@ export default function Home() {
                   </div>
                   <div style={{ padding: '1rem' }}>
                     <p style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: '0.5rem' }}>{item.title}</p>
-                    <a href={item.download_url} target="_blank" style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700, textDecoration: 'none' }}>Download Again →</a>
+                    <a href={getDownloadHref(item)} target="_blank" rel="noopener noreferrer" download style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700, textDecoration: 'none' }}>Download Again →</a>
                   </div>
                 </div>
               ))}
