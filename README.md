@@ -15,17 +15,19 @@ A professional social media downloader platform focused exclusively on high-qual
 3. Activate it: `venv\Scripts\activate` (Windows) or `source venv/bin/activate` (Mac/Linux).
 4. Install dependencies: `pip install -r requirements.txt`.
 5. Run the server: `python main.py`.
+6. Set `MONGO_URI`, `MONGO_DB_NAME` (optional), and `JWT_SECRET` before starting the backend.
 
 ### Frontend Setup
 1. Navigate to `/frontend`.
 2. Install dependencies: `npm install`.
 3. Run the dev server: `npm run dev`.
+4. Set `BACKEND_API_URL` if your FastAPI service is not running locally.
 
 ## Tech Stack
 - **Frontend**: Next.js, TypeScript, Vanilla CSS
 - **Backend**: FastAPI, yt-dlp
-- **Database/Auth**: Supabase
-- **Monetization**: PKR 10 per download (integrated via Supabase quotas)
+- **Database/Auth**: MongoDB Atlas + JWT
+- **Monetization**: PKR 10 per download (tracked in MongoDB quotas)
 
 ## Strategic Pivot: Instagram-Only Focus
 As of May 2026, SnapSave Pro has transitioned to an **Instagram-Only** platform. This strategic decision was made to ensure maximum stability and reliability for our users. 
