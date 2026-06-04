@@ -69,6 +69,8 @@ IG_DAILY_LIMIT = 5
 def _get_platform(url: str) -> str:
     if "instagram.com" in url:
         return "instagram"
+    if "youtu.be" in url or "youtube.com" in url:
+        return "youtube"
     return "unknown"
 
 def check_user_quota(user_id: str, platform: str) -> bool:
@@ -108,7 +110,7 @@ def increment_user_quota(user_id: str, platform: str):
 # Request model with URL validation
 # ─────────────────────────────────────────────
 SUPPORTED_DOMAINS = re.compile(
-    r"(instagram\.com)", re.IGNORECASE
+    r"(instagram\.com|youtu\.be|youtube\.com)", re.IGNORECASE
 )
 
 class ExtractRequest(BaseModel):
@@ -161,7 +163,6 @@ async def extract_media(
         # ── Quota check ──────────────────────────
         if user_id:
             if not check_user_quota(user_id, platform):
-                limit = IG_DAILY_LIMIT if platform == "instagram" else 0
                 return {"success": False, "error": f"Daily limit reached. Upgrade to PRO."}
         else:
             if not check_guest_quota(client_ip):
