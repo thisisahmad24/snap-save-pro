@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-// TODO: Replace with MongoDB custom auth API call
-// import { getAuthUser, updateProfile } from "@/lib/auth";
+import { authHeaders, getStoredToken, saveSession } from "@/lib/session";
 
 export default function Profile() {
   const [user, setUser] = useState<any>(null);
@@ -21,33 +20,34 @@ export default function Profile() {
   const router = useRouter();
 
   useEffect(() => {
-    // TODO: Replace with JWT token validation & profile fetch from MongoDB
-    // const token = localStorage.getItem("snap_token");
-    // if (!token) { router.push("/login"); return; }
-    // fetch("/api/auth/profile", { headers: { Authorization: `Bearer ${token}` } })
-    //   .then(res => res.json())
-    //   .then(data => { setUser(data.user); setProfile(data.profile); setLoading(false); })
-    //   .catch(() => { router.push("/login"); });
-
-    const storedUser = localStorage.getItem("snap_user");
-    if (!storedUser) {
+    const token = getStoredToken();
+    if (!token) {
       router.push("/login");
       return;
     }
-    try {
-      const parsed = JSON.parse(storedUser);
-      setUser(parsed);
-      setProfile({
-        full_name: parsed.full_name || "",
-        username: parsed.username || "",
-        country: parsed.country || "",
-        avatar_url: parsed.avatar_url || "",
-        is_pro: parsed.is_pro || false,
-      });
-    } catch {
-      router.push("/login");
-    }
-    setLoading(false);
+
+    fetch("/api/auth/me", {
+      headers: authHeaders(),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!data.success || !data.user) {
+          router.push("/login");
+          return;
+        }
+
+        setUser(data.user);
+        setProfile({
+          full_name: data.user.full_name || "",
+          username: data.user.username || "",
+          country: data.user.country || "",
+          avatar_url: data.user.avatar_url || "",
+          is_pro: data.user.is_pro || false,
+        });
+        saveSession(token, data.user);
+      })
+      .catch(() => router.push("/login"))
+      .finally(() => setLoading(false));
   }, [router]);
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -61,16 +61,38 @@ export default function Profile() {
     setMessage("");
 
     try {
-      // TODO: Replace with PUT/PATCH to /api/auth/profile (MongoDB)
-      // const token = localStorage.getItem("snap_token");
-      // const res = await fetch("/api/auth/profile", {
-      //   method: "PUT",
-      //   headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      //   body: JSON.stringify({ full_name: profile.full_name, username: profile.username, country: profile.country, avatar_url: profile.avatar_url }),
-      // });
-      // if (!res.ok) throw new Error("Update failed");
+      const response = await fetch("/api/auth/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          full_name: profile.full_name,
+          username: profile.username,
+          country: profile.country,
+          avatar_url: profile.avatar_url,
+        }),
+      });
 
-      setMessage("Profile update coming soon. MongoDB backend is being set up.");
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Update failed");
+      }
+
+      setUser(data.user);
+      setProfile({
+        full_name: data.user.full_name || "",
+        username: data.user.username || "",
+        country: data.user.country || "",
+        avatar_url: data.user.avatar_url || "",
+        is_pro: data.user.is_pro || false,
+      });
+      const token = getStoredToken();
+      if (token) {
+        saveSession(token, data.user);
+      }
+      setMessage("Profile updated successfully.");
     } catch (err: any) {
       setMessage("Error: " + err.message);
     } finally {
