@@ -4,7 +4,7 @@
 -- The actual schema is managed by MongoDB collections.
 -- ─────────────────────────────────────────────
 
--- Previous Supabase/PostgreSQL schema has been removed.
+-- Legacy SQL schema removed in favor of MongoDB.
 -- MongoDB collections will be set up programmatically.
 
 -- Collection: users

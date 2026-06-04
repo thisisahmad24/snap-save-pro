@@ -5,7 +5,7 @@ The system follows a decoupled architecture with a React-based frontend and a Py
 
 ### Frontend (Next.js 15)
 - **Role**: User Interface, Authentication, Payment Processing, Routing.
-- **Tech**: React 19, Vanilla CSS, Supabase Auth.
+- **Tech**: React 19, Vanilla CSS, MongoDB-backed JWT Auth.
 - **Endpoints**: Communicates with FastAPI for media extraction.
 
 ### Backend (FastAPI)
@@ -18,7 +18,7 @@ The system follows a decoupled architecture with a React-based frontend and a Py
 ### Phase 1: Environment Setup
 - Initialize Next.js in `/frontend`.
 - Initialize FastAPI in `/backend`.
-- Configure Supabase project and environment variables.
+- Configure MongoDB Atlas and environment variables.
 
 ### Phase 2: Python Extraction Logic
 - Create FastAPI endpoints for `/api/instagram` and `/api/youtube`.
@@ -26,7 +26,7 @@ The system follows a decoupled architecture with a React-based frontend and a Py
 
 ### Phase 3: Premium UI & Auth
 - Develop the "Pro" Navbar and Footer with mobile responsiveness.
-- Set up Supabase Auth (Sign up / Sign in).
+- Set up MongoDB Auth (Sign up / Sign in).
 - Design the Landing Page with the link input and download preview.
 
 ### Phase 4: Monetization & Quotas

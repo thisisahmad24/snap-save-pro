@@ -1,18 +1,17 @@
-from fastapi import FastAPI, HTTPException, Request, Form
+from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, HttpUrl, validator
+from pydantic import BaseModel, validator
 import os
 import re
-import time
 import logging
 from datetime import date, datetime, timezone
 from collections import defaultdict
 from dotenv import load_dotenv
 from utils.extractor import extract_media_info
+from utils.mongo import get_collection, ensure_indexes, utc_now
+from utils.security import create_access_token, decode_access_token, hash_password, verify_password
+from bson import ObjectId
 from typing import Optional
-
-# TODO: Add MongoDB imports once connection is set up
-# from pymongo import MongoClient
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,6 +19,88 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = FastAPI(title="SnapSave Pro API", version="1.0.0")
+
+
+def _serialize_user(document: dict) -> dict:
+    return {
+        "id": str(document.get("_id")),
+        "email": document.get("email"),
+        "full_name": document.get("full_name", ""),
+        "username": document.get("username", ""),
+        "country": document.get("country", ""),
+        "avatar_url": document.get("avatar_url", ""),
+        "is_pro": document.get("is_pro", False),
+        "plan": document.get("plan", "free"),
+        "download_count_ig": document.get("download_count_ig", 0),
+        "download_count_yt": document.get("download_count_yt", 0),
+        "download_count_total": document.get("download_count_total", 0),
+        "last_reset_date": document.get("last_reset_date"),
+        "created_at": document.get("created_at"),
+    }
+
+
+def _get_user_collection():
+    return get_collection("users")
+
+
+def _get_download_collection():
+    return get_collection("downloads")
+
+
+def _get_transactions_collection():
+    return get_collection("transactions")
+
+
+def _get_current_user(authorization: Optional[str]) -> Optional[dict]:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+
+    token = authorization.removeprefix("Bearer ").strip()
+    try:
+        payload = decode_access_token(token)
+    except Exception:
+        return None
+
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+
+    users = _get_user_collection()
+    if users is None:
+        return None
+
+    try:
+        object_id = ObjectId(user_id)
+    except Exception:
+        return None
+
+    user = users.find_one({"_id": object_id})
+    if not user:
+        return None
+    return user
+
+
+def _maybe_reset_user_quota(user: dict) -> dict:
+    today = str(date.today())
+    if user.get("last_reset_date") != today:
+        users = _get_user_collection()
+        if users is not None:
+            users.update_one(
+                {"_id": user["_id"]},
+                {
+                    "$set": {
+                        "download_count_ig": 0,
+                        "download_count_yt": 0,
+                        "download_count_total": 0,
+                        "last_reset_date": today,
+                    }
+                },
+            )
+            user["download_count_ig"] = 0
+            user["download_count_yt"] = 0
+            user["download_count_total"] = 0
+            user["last_reset_date"] = today
+    return user
 
 # ─────────────────────────────────────────────
 # CORS — allow frontend (localhost:3000 + prod)
@@ -75,40 +156,78 @@ def _get_platform(url: str) -> str:
 
 def check_user_quota(user_id: str, platform: str) -> bool:
     """Returns True if user is allowed to download, False if limit reached."""
-    # TODO: Replace with MongoDB query
-    # profile = profiles_collection.find_one({"_id": user_id})
-    # if not profile:
-    #     return True  # new user — allow
-    # if profile.get("is_pro"):
-    #     return True
-    # today = str(date.today())
-    # if profile.get("last_reset_date") != today:
-    #     profiles_collection.update_one(
-    #         {"_id": user_id},
-    #         {"$set": {"download_count_ig": 0, "download_count_yt": 0, "last_reset_date": today}}
-    #     )
-    #     return True
-    # if platform == "instagram" and profile.get("download_count_ig", 0) >= IG_DAILY_LIMIT:
-    #     return False
-    # return True
+    users = _get_user_collection()
+    if users is None:
+        return True
 
-    # Fallback: allow all downloads until MongoDB is configured
-    return True
+    try:
+        object_id = ObjectId(user_id)
+    except Exception:
+        return True
+
+    user = users.find_one({"_id": object_id})
+    if not user:
+        return True
+
+    user = _maybe_reset_user_quota(user)
+    if user.get("is_pro"):
+        return True
+
+    platform_limit = IG_DAILY_LIMIT if platform == "instagram" else 3
+    if platform == "instagram":
+        return user.get("download_count_ig", 0) < platform_limit
+    if platform == "youtube":
+        return user.get("download_count_yt", 0) < platform_limit
+    return user.get("download_count_total", 0) < platform_limit
 
 def increment_user_quota(user_id: str, platform: str):
     """Safely increments the appropriate counter.
-    TODO: Replace with MongoDB update once connection is configured.
     """
-    # field = "download_count_ig" if platform == "instagram" else "download_count_yt"
-    # profiles_collection.update_one(
-    #     {"_id": user_id},
-    #     {"$inc": {field: 1}, "$set": {"last_reset_date": str(date.today())}}
-    # )
-    pass
+    users = _get_user_collection()
+    if users is None:
+        return
+
+    field = "download_count_ig" if platform == "instagram" else "download_count_yt"
+    try:
+        object_id = ObjectId(user_id)
+    except Exception:
+        return
+    users.update_one(
+        {"_id": object_id},
+        {
+            "$inc": {field: 1, "download_count_total": 1},
+            "$set": {"last_reset_date": str(date.today())},
+        },
+    )
 
 # ─────────────────────────────────────────────
 # Request model with URL validation
 # ─────────────────────────────────────────────
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    username: str
+    plan: str = "free"
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    username: Optional[str] = None
+    country: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class UpgradeRequest(BaseModel):
+    plan: str = "pro"
+    transaction_id: str
+
+
 SUPPORTED_DOMAINS = re.compile(
     r"(instagram\.com|youtu\.be|youtube\.com)", re.IGNORECASE
 )
@@ -144,6 +263,167 @@ async def health():
     }
 
 
+@app.on_event("startup")
+async def startup_event():
+    try:
+        ensure_indexes()
+    except Exception as exc:
+        logger.warning(f"MongoDB index initialization skipped: {exc}")
+
+
+@app.post("/api/auth/register", tags=["Auth"])
+async def register_user(payload: RegisterRequest):
+    users = _get_user_collection()
+    if users is None:
+        return {"success": False, "error": "MongoDB is not configured."}
+
+    email = payload.email.strip().lower()
+    username = payload.username.strip()
+    if users.find_one({"email": email}):
+        return {"success": False, "error": "Email is already registered."}
+    if users.find_one({"username": username}):
+        return {"success": False, "error": "Username is already taken."}
+
+    plan = payload.plan.strip().lower()
+    is_pro = plan in {"pro", "enterprise"}
+    user_doc = {
+        "email": email,
+        "password_hash": hash_password(payload.password),
+        "full_name": payload.full_name.strip(),
+        "username": username,
+        "country": "",
+        "avatar_url": "",
+        "plan": plan,
+        "is_pro": is_pro,
+        "download_count_ig": 0,
+        "download_count_yt": 0,
+        "download_count_total": 0,
+        "last_reset_date": str(date.today()),
+        "created_at": utc_now(),
+        "updated_at": utc_now(),
+    }
+
+    result = users.insert_one(user_doc)
+    user_doc["_id"] = result.inserted_id
+    token = create_access_token(str(result.inserted_id), email)
+    return {"success": True, "token": token, "user": _serialize_user(user_doc)}
+
+
+@app.post("/api/auth/login", tags=["Auth"])
+async def login_user(payload: LoginRequest):
+    users = _get_user_collection()
+    if users is None:
+        return {"success": False, "error": "MongoDB is not configured."}
+
+    user = users.find_one({"email": payload.email.strip().lower()})
+    if not user or not verify_password(payload.password, user.get("password_hash", "")):
+        return {"success": False, "error": "Invalid email or password."}
+
+    token = create_access_token(str(user["_id"]), user["email"])
+    return {"success": True, "token": token, "user": _serialize_user(user)}
+
+
+@app.get("/api/auth/me", tags=["Auth"])
+async def get_current_profile(authorization: Optional[str] = Header(default=None)):
+    user = _get_current_user(authorization)
+    if not user:
+        return {"success": False, "error": "Unauthorized"}
+    return {"success": True, "user": _serialize_user(user)}
+
+
+@app.put("/api/auth/profile", tags=["Auth"])
+async def update_profile(payload: ProfileUpdateRequest, authorization: Optional[str] = Header(default=None)):
+    users = _get_user_collection()
+    if users is None:
+        return {"success": False, "error": "MongoDB is not configured."}
+
+    user = _get_current_user(authorization)
+    if not user:
+        return {"success": False, "error": "Unauthorized"}
+    if not user.get("is_pro"):
+        return {"success": False, "error": "Only Pro users can edit their profile details."}
+
+    update_data = {
+        "updated_at": utc_now(),
+    }
+    if payload.full_name is not None:
+        update_data["full_name"] = payload.full_name.strip()
+    if payload.username is not None:
+        username = payload.username.strip()
+        if username != user.get("username") and users.find_one({"username": username, "_id": {"$ne": user["_id"]}}):
+            return {"success": False, "error": "Username is already taken."}
+        update_data["username"] = username
+    if payload.country is not None:
+        update_data["country"] = payload.country.strip()
+    if payload.avatar_url is not None:
+        update_data["avatar_url"] = payload.avatar_url.strip()
+
+    users.update_one({"_id": user["_id"]}, {"$set": update_data})
+    updated_user = users.find_one({"_id": user["_id"]})
+    return {"success": True, "user": _serialize_user(updated_user)}
+
+
+@app.post("/api/auth/upgrade", tags=["Auth"])
+async def upgrade_account(payload: UpgradeRequest, authorization: Optional[str] = Header(default=None)):
+    users = _get_user_collection()
+    transactions = _get_transactions_collection()
+    if users is None:
+        return {"success": False, "error": "MongoDB is not configured."}
+
+    user = _get_current_user(authorization)
+    if not user:
+        return {"success": False, "error": "Unauthorized"}
+
+    users.update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {
+                "is_pro": True,
+                "plan": payload.plan,
+                "last_upgrade_at": utc_now(),
+                "updated_at": utc_now(),
+            }
+        },
+    )
+
+    if transactions is not None:
+        transactions.insert_one(
+            {
+                "user_id": user["_id"],
+                "plan": payload.plan,
+                "transaction_id": payload.transaction_id,
+                "status": "approved",
+                "created_at": utc_now(),
+            }
+        )
+
+    updated_user = users.find_one({"_id": user["_id"]})
+    return {"success": True, "user": _serialize_user(updated_user)}
+
+
+@app.get("/api/auth/me/downloads", tags=["Auth"])
+async def get_my_downloads(authorization: Optional[str] = Header(default=None)):
+    downloads = _get_download_collection()
+    user = _get_current_user(authorization)
+    if not user:
+        return {"success": False, "error": "Unauthorized"}
+    if downloads is None:
+        return {"success": True, "downloads": []}
+
+    cursor = downloads.find({"user_id": user["_id"]}).sort("created_at", -1).limit(5)
+    items = []
+    for item in cursor:
+        items.append({
+            "title": item.get("title", "download"),
+            "thumbnail": item.get("thumbnail", ""),
+            "download_url": item.get("download_url", ""),
+            "platform": item.get("platform", ""),
+            "ext": item.get("ext", "mp4"),
+            "created_at": item.get("created_at"),
+        })
+    return {"success": True, "downloads": items}
+
+
 @app.get("/api/v1/media-query", tags=["Downloader"])
 async def extract_get_info():
     return {"status": "error", "message": "Please use POST method for extraction."}
@@ -151,11 +431,15 @@ async def extract_get_info():
 @app.post("/api/v1/media-query", tags=["Downloader"])
 async def extract_media(
     request_data: ExtractRequest,
-    request: Request
+    request: Request,
+    authorization: Optional[str] = Header(default=None)
 ):
     try:
         target_url = request_data.url
         user_id = request_data.userId
+        current_user = _get_current_user(authorization)
+        if current_user:
+            user_id = str(current_user["_id"])
         
         platform = _get_platform(target_url)
         client_ip = request.client.host if request.client else "unknown"
@@ -177,6 +461,22 @@ async def extract_media(
                 increment_user_quota(user_id, platform)
             else:
                 increment_guest_quota(client_ip)
+
+            downloads = _get_download_collection()
+            if downloads is not None and user_id:
+                downloads.insert_one(
+                    {
+                        "user_id": ObjectId(user_id),
+                        "platform": platform,
+                        "title": result.get("title", "download"),
+                        "thumbnail": result.get("thumbnail", ""),
+                        "download_url": result.get("download_url", ""),
+                        "ext": result.get("ext", "mp4"),
+                        "source_url": target_url,
+                        "client_ip": client_ip,
+                        "created_at": utc_now(),
+                    }
+                )
                 
         return result
 
