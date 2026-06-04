@@ -110,39 +110,45 @@ def _fallback_instagram_rapidapi(url: str) -> dict:
 def _best_format_url(info: dict) -> str | None:
     """
     Pick the best direct download URL from the extracted info.
-    Priority: mp4 video → best available format → top-level url
+    Priority: direct video file → merged media → audio/video fallback → top-level url
     """
     formats = info.get("formats", [])
 
-    # 1. Prefer mp4 with both video+audio
-    mp4_formats = [
+    def is_direct_media(format_item: dict) -> bool:
+        protocol = (format_item.get("protocol") or "").lower()
+        url = format_item.get("url")
+        if not url:
+            return False
+        return not any(marker in protocol for marker in ("m3u8", "dash", "manifest"))
+
+    # 1. Prefer direct mp4/webm media with video + audio
+    progressive_formats = [
         f for f in formats
-        if f.get("ext") == "mp4"
+        if is_direct_media(f)
         and f.get("vcodec") != "none"
         and f.get("acodec") != "none"
-        and f.get("url")
     ]
-    if mp4_formats:
-        # Pick highest resolution mp4
-        mp4_formats.sort(key=lambda f: f.get("height") or 0, reverse=True)
-        return mp4_formats[0]["url"]
+    if progressive_formats:
+        progressive_formats.sort(key=lambda f: ((f.get("height") or 0), (f.get("tbr") or 0)), reverse=True)
+        return progressive_formats[0]["url"]
 
-    # 2. Any format with both video+audio
-    av_formats = [
+    # 2. Prefer direct video files even if they are video-only
+    video_only_formats = [
         f for f in formats
-        if f.get("vcodec") != "none"
-        and f.get("acodec") != "none"
-        and f.get("url")
+        if is_direct_media(f)
+        and f.get("vcodec") != "none"
+        and f.get("acodec") == "none"
     ]
-    if av_formats:
-        av_formats.sort(key=lambda f: f.get("height") or 0, reverse=True)
-        return av_formats[0]["url"]
+    if video_only_formats:
+        video_only_formats.sort(key=lambda f: ((f.get("height") or 0), (f.get("tbr") or 0)), reverse=True)
+        return video_only_formats[0]["url"]
 
-    # 3. Fallback: last format (usually highest quality available)
+    # 3. Any direct format with audio or video
     if formats:
-        for f in reversed(formats):
-            if f.get("url"):
-                return f["url"]
+        direct_formats = [f for f in formats if is_direct_media(f)]
+        if direct_formats:
+            direct_formats.sort(key=lambda f: ((f.get("height") or 0), (f.get("tbr") or 0)), reverse=True)
+            return direct_formats[0]["url"]
 
     # 4. Top-level url (Instagram direct links, etc.)
     return info.get("url")
@@ -166,14 +172,13 @@ def extract_media_info(url: str) -> dict:
     # Use cookies if provided in environment variables to bypass login walls
     cookie_file = None
     ig_cookies = os.getenv("INSTAGRAM_COOKIES")
-    
-    selected_cookies = ig_cookies
 
-    if selected_cookies:
+    if ig_cookies:
         import tempfile
+
         # Create a temporary file to store cookies for yt-dlp
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
-            f.write(selected_cookies)
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+            f.write(ig_cookies)
             cookie_file = f.name
         ydl_opts["cookiefile"] = cookie_file
 
@@ -184,12 +189,6 @@ def extract_media_info(url: str) -> dict:
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            
-            # Clean up cookie file after extraction
-            if cookie_file and os.path.exists(cookie_file):
-                os.remove(cookie_file)
-
-
             download_url = _best_format_url(info)
 
             if not download_url:
@@ -250,3 +249,6 @@ def extract_media_info(url: str) -> dict:
     except Exception as e:
         logger.error(f"Unexpected error for {url}: {e}")
         return {"success": False, "error": f"System Error: {str(e)[:100]}"}
+    finally:
+        if cookie_file and os.path.exists(cookie_file):
+            os.remove(cookie_file)
