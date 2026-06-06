@@ -40,9 +40,10 @@ export default function Pricing() {
 
   const plans = [
     {
-      name: "Free Tier",
-      price: "0",
-      features: ["5 Instagram Reels/day", "3 YouTube Videos/day", "Standard Quality", "No Registration Required"],
+      name: "Starter Access",
+      price: "100",
+      currency: "PKR",
+      features: ["1 Regional Download", "Localized Checkout", "Standard Quality", "Instant Activation"],
       buttonText: "Get Started",
       highlight: false
     },
@@ -119,7 +120,11 @@ export default function Pricing() {
               <div style={{ fontSize: '3rem', fontWeight: 800, marginBottom: '2rem', display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
                 {plan.currency && <span style={{ fontSize: '1rem', opacity: 0.5 }}>{plan.currency}</span>}
                 {plan.price}
-                {plan.price !== "Custom" && <span style={{ fontSize: '1rem', opacity: 0.5 }}>{plan.name === "Free Tier" ? "/day" : "/month"}</span>}
+                {plan.price !== "Custom" && (
+                  <span style={{ fontSize: '1rem', opacity: 0.5 }}>
+                    {plan.name === "Starter Access" ? "/download" : "/month"}
+                  </span>
+                )}
               </div>
               <ul style={{ listStyle: 'none', padding: 0, marginBottom: '3rem', flex: 1 }}>
                 {plan.features.map((feature, j) => (
@@ -129,7 +134,7 @@ export default function Pricing() {
                 ))}
               </ul>
               <Link 
-                href={plan.name === "Enterprise" ? "/contact" : `/checkout?plan=${plan.name.toLowerCase().includes('pro') ? 'pro' : 'free'}`}
+                href={plan.name === "Enterprise" ? "/contact" : `/checkout?plan=${plan.name.toLowerCase().includes('pro') ? 'pro' : 'single'}`}
                 style={{
                   padding: '1rem',
                   borderRadius: 'var(--radius)',

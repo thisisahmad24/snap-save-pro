@@ -9,6 +9,7 @@ from collections import defaultdict
 from dotenv import load_dotenv
 from utils.extractor import extract_media_info
 from utils.mongo import get_collection, ensure_indexes, utc_now
+from utils.payments import plan_title, quote_price
 from utils.security import create_access_token, decode_access_token, hash_password, verify_password
 from bson import ObjectId
 from typing import Optional
@@ -228,6 +229,20 @@ class UpgradeRequest(BaseModel):
     transaction_id: str
 
 
+class PaymentQuoteRequest(BaseModel):
+    plan: str = "single"
+    country: Optional[str] = None
+    region: Optional[str] = None
+
+
+class PaymentSessionRequest(PaymentQuoteRequest):
+    redirect_base_url: Optional[str] = None
+
+
+class PaymentConfirmRequest(BaseModel):
+    session_id: str
+
+
 SUPPORTED_DOMAINS = re.compile(
     r"(instagram\.com|youtu\.be|youtube\.com)", re.IGNORECASE
 )
@@ -422,6 +437,197 @@ async def get_my_downloads(authorization: Optional[str] = Header(default=None)):
             "created_at": item.get("created_at"),
         })
     return {"success": True, "downloads": items}
+
+
+@app.post("/api/payments/quote", tags=["Payments"])
+async def payment_quote(payload: PaymentQuoteRequest):
+    quote = quote_price(payload.plan, payload.country, payload.region)
+    return {
+        "success": True,
+        "plan": quote.plan,
+        "title": plan_title(quote.plan),
+        "country": quote.country,
+        "region": quote.region,
+        "currency": quote.currency,
+        "amount_major": quote.amount_major,
+        "amount_minor": quote.amount_minor,
+        "display_price": quote.display_price,
+    }
+
+
+@app.post("/api/payments/create-session", tags=["Payments"])
+async def create_payment_session(
+    payload: PaymentSessionRequest,
+    authorization: Optional[str] = Header(default=None),
+):
+    try:
+        current_user = _get_current_user(authorization)
+        if not current_user:
+            return {"success": False, "error": "Unauthorized"}
+
+        stripe_secret_key = os.getenv("STRIPE_SECRET_KEY")
+        if not stripe_secret_key:
+            return {"success": False, "error": "Stripe is not configured."}
+
+        try:
+            import stripe
+        except Exception:
+            return {"success": False, "error": "Stripe library is missing from the backend environment."}
+
+        stripe.api_key = stripe_secret_key
+        quote = quote_price(payload.plan, payload.country, payload.region)
+        redirect_base_url = (payload.redirect_base_url or os.getenv("APP_URL") or "").rstrip("/")
+        if not redirect_base_url:
+            return {"success": False, "error": "Missing redirect URL."}
+
+        success_url = (
+            f"{redirect_base_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
+            f"&plan={quote.plan}"
+        )
+        cancel_url = (
+            f"{redirect_base_url}/checkout?plan={quote.plan}"
+            f"&country={quote.country}&region={quote.region}"
+        )
+
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            client_reference_id=str(current_user["_id"]),
+            success_url=success_url,
+            cancel_url=cancel_url,
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": quote.currency.lower(),
+                        "product_data": {
+                            "name": plan_title(quote.plan),
+                            "description": f"Regional checkout for {quote.country} / {quote.region}",
+                        },
+                        "unit_amount": quote.amount_minor,
+                    },
+                    "quantity": 1,
+                }
+            ],
+            metadata={
+                "user_id": str(current_user["_id"]),
+                "plan": quote.plan,
+                "country": quote.country,
+                "region": quote.region,
+            },
+        )
+
+        transactions = _get_transactions_collection()
+        if transactions is not None:
+            transactions.insert_one(
+                {
+                    "user_id": current_user["_id"],
+                    "plan": quote.plan,
+                    "country": quote.country,
+                    "region": quote.region,
+                    "currency": quote.currency,
+                    "amount_minor": quote.amount_minor,
+                    "display_price": quote.display_price,
+                    "provider": "stripe",
+                    "stripe_session_id": session.id,
+                    "status": "pending",
+                    "created_at": utc_now(),
+                    "updated_at": utc_now(),
+                }
+            )
+
+        return {
+            "success": True,
+            "session_id": session.id,
+            "url": session.url,
+            "display_price": quote.display_price,
+            "currency": quote.currency,
+            "amount_minor": quote.amount_minor,
+            "plan": quote.plan,
+        }
+    except Exception as exc:
+        logger.error(f"Create payment session error: {exc}")
+        return {"success": False, "error": "Could not create checkout session."}
+
+
+@app.post("/api/payments/confirm", tags=["Payments"])
+async def confirm_payment(
+    payload: PaymentConfirmRequest,
+    authorization: Optional[str] = Header(default=None),
+):
+    try:
+        current_user = _get_current_user(authorization)
+        if not current_user:
+            return {"success": False, "error": "Unauthorized"}
+
+        stripe_secret_key = os.getenv("STRIPE_SECRET_KEY")
+        if not stripe_secret_key:
+            return {"success": False, "error": "Stripe is not configured."}
+
+        try:
+            import stripe
+        except Exception:
+            return {"success": False, "error": "Stripe library is missing from the backend environment."}
+
+        stripe.api_key = stripe_secret_key
+        session = stripe.checkout.Session.retrieve(payload.session_id)
+        if not session:
+            return {"success": False, "error": "Payment session not found."}
+
+        if session.payment_status != "paid":
+            return {"success": False, "error": "Payment has not completed yet."}
+
+        metadata = session.metadata or {}
+        plan = metadata.get("plan", "single")
+        transactions = _get_transactions_collection()
+        users = _get_user_collection()
+
+        if transactions is not None:
+            transactions.update_one(
+                {"stripe_session_id": session.id},
+                {
+                    "$set": {
+                        "status": "paid",
+                        "paid_at": utc_now(),
+                        "updated_at": utc_now(),
+                        "stripe_payment_intent": getattr(session, "payment_intent", None),
+                    }
+                },
+            )
+
+        upgraded_user = None
+        if plan == "pro" and users is not None:
+            users.update_one(
+                {"_id": current_user["_id"]},
+                {
+                    "$set": {
+                        "is_pro": True,
+                        "plan": "pro",
+                        "last_upgrade_at": utc_now(),
+                        "updated_at": utc_now(),
+                    }
+                },
+            )
+            upgraded_user = users.find_one({"_id": current_user["_id"]})
+
+        if transactions is not None:
+            transactions.update_one(
+                {"stripe_session_id": session.id},
+                {
+                    "$set": {
+                        "status": "fulfilled",
+                        "updated_at": utc_now(),
+                    }
+                },
+            )
+
+        return {
+            "success": True,
+            "session_id": session.id,
+            "plan": plan,
+            "user": _serialize_user(upgraded_user or current_user),
+        }
+    except Exception as exc:
+        logger.error(f"Confirm payment error: {exc}")
+        return {"success": False, "error": "Could not confirm payment."}
 
 
 @app.get("/api/v1/media-query", tags=["Downloader"])
