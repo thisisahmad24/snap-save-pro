@@ -15,7 +15,7 @@ A professional social media downloader platform focused exclusively on high-qual
 3. Activate it: `venv\Scripts\activate` (Windows) or `source venv/bin/activate` (Mac/Linux).
 4. Install dependencies: `pip install -r requirements.txt`.
 5. Run the server: `python main.py`.
-6. Set `MONGO_URI`, `MONGO_DB_NAME` (optional), and `JWT_SECRET` before starting the backend.
+6. Set `MONGO_URI`, `MONGO_DB_NAME` (optional), `JWT_SECRET`, and `STRIPE_SECRET_KEY` before starting the backend.
 
 ### Frontend Setup
 1. Navigate to `/frontend`.
