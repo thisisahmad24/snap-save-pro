@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -17,7 +18,9 @@ import {
 function CheckoutContent() {
   const searchParams = useSearchParams();
   const plan = searchParams.get("plan") || "pro";
+  const effectivePlan = plan === "free" ? "single" : plan;
   const [loading, setLoading] = useState(false);
+  const [loadingQuote, setLoadingQuote] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
   const [transactionId, setTransactionId] = useState("");
@@ -95,7 +98,13 @@ function CheckoutContent() {
       } catch {
         setStatus("error");
       }
-    }, 2000);
+
+      throw new Error("Stripe checkout URL was not returned.");
+    } catch (err: any) {
+      setError(err.message || "Could not start payment.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -183,7 +192,7 @@ function CheckoutContent() {
               }}
             >
               <span>Platform Service Fee</span>
-              <span>PKR 0.00</span>
+              <span>Included</span>
             </div>
 
             <div
@@ -327,6 +336,38 @@ function CheckoutContent() {
                   </div>
                   <div style={{ fontSize: "0.85rem", opacity: 0.6 }}>SadaPay</div>
                 </div>
+              )}
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                <label style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                  <span style={{ fontSize: "0.9rem", fontWeight: 700, opacity: 0.8 }}>Country</span>
+                  <select
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    style={{ padding: "1rem 1.25rem", borderRadius: "1rem", backgroundColor: "var(--background)", border: "1px solid var(--border)", color: "white", fontSize: "1rem", outline: "none" }}
+                  >
+                    {countryOptions.map((option) => (
+                      <option key={option.code} value={option.code}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                  <span style={{ fontSize: "0.9rem", fontWeight: 700, opacity: 0.8 }}>Region</span>
+                  <select
+                    value={region}
+                    onChange={(e) => setRegion(e.target.value)}
+                    style={{ padding: "1rem 1.25rem", borderRadius: "1rem", backgroundColor: "var(--background)", border: "1px solid var(--border)", color: "white", fontSize: "1rem", outline: "none" }}
+                  >
+                    {regionOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
 
               {/* Step 2: Verify */}

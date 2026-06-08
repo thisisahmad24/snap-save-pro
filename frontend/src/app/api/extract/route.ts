@@ -8,14 +8,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "URL is required" }, { status: 400 });
     }
 
-    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
+    const backendUrl = process.env.BACKEND_API_URL
+      ? `${process.env.BACKEND_API_URL.replace(/\/$/, "")}/api/v1/media-query`
+      : new URL("/api/proxy/v1/media-query", request.url).toString();
     
     // 1. Attempt to call the Python backend first for full quota tracking, db logging, and extraction
     try {
-      console.log(`Forwarding extraction request to backend: ${backendUrl}/api/v1/media-query`);
-      const response = await fetch(`${backendUrl}/api/v1/media-query`, {
+      console.log(`Forwarding extraction request to backend: ${backendUrl}`);
+      const authorization = request.headers.get("authorization");
+      const response = await fetch(backendUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(authorization ? { Authorization: authorization } : {}),
+        },
         body: JSON.stringify({ url, userId }),
         // Timeout after 15 seconds for backend response
         signal: AbortSignal.timeout(15000)

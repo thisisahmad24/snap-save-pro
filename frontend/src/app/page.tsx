@@ -27,21 +27,9 @@ export default function Home() {
   const [ratesLoaded, setRatesLoaded] = useState(false);
 
   useEffect(() => {
-    // TODO: Replace with JWT token check from localStorage/cookie
-    // const token = localStorage.getItem("snap_token");
-    // if (token) {
-    //   fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
-    //     .then(res => res.json())
-    //     .then(data => setUser(data.user));
-    // }
-
-    const storedUser = localStorage.getItem("snap_user");
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        setUser(null);
-      }
+    const cachedUser = getStoredUser();
+    if (cachedUser) {
+      setUser(cachedUser);
     }
 
     const saved = localStorage.getItem("recent_downloads");
@@ -70,6 +58,16 @@ export default function Home() {
     });
   };
 
+  const getDownloadHref = (item: any) => {
+    const params = new URLSearchParams({
+      url: item.download_url,
+      title: item.title || "download",
+      ext: item.ext || "mp4",
+    });
+
+    return `/api/download?${params.toString()}`;
+  };
+
   /**
    * Handles the form submission to extract media from the provided URL.
    * Sends the URL to the backend API and handles quota limits and errors.
@@ -87,7 +85,10 @@ export default function Home() {
       // Call our local Vercel API route (No CORS issues, super fast)
       const response = await fetch('/api/extract', {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+        },
         body: JSON.stringify({ url, userId: user?.id || null }),
       });
       
@@ -262,9 +263,10 @@ export default function Home() {
                 
                 <div style={{ display: 'flex', gap: '1rem' }}>
                   <a
-                    href={result.download_url}
+                    href={getDownloadHref(result)}
                     target="_blank"
                     rel="noopener noreferrer"
+                    download
                     style={{
                       flex: 1,
                       padding: '1.2rem',
@@ -320,7 +322,7 @@ export default function Home() {
                   </div>
                   <div style={{ padding: '1rem' }}>
                     <p style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: '0.5rem' }}>{item.title}</p>
-                    <a href={item.download_url} target="_blank" style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700, textDecoration: 'none' }}>Download Again →</a>
+                    <a href={getDownloadHref(item)} target="_blank" rel="noopener noreferrer" download style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700, textDecoration: 'none' }}>Download Again →</a>
                   </div>
                 </div>
               ))}

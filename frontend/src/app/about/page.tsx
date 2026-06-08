@@ -30,7 +30,7 @@ export default function About() {
           }}>
             <h2 style={{ fontSize: '2rem', marginBottom: '1.5rem' }}>The Tech Behind SnapSave</h2>
             <p style={{ fontSize: '1rem', opacity: 0.7 }}>
-              Built with Next.js, FastAPI, and powered by yt-dlp, our engine is optimized for speed and reliability. We use Supabase to manage user quotas fairly, ensuring a high-quality service for all.
+              Built with Next.js, FastAPI, and powered by yt-dlp, our engine is optimized for speed and reliability. We use MongoDB to manage user accounts, quotas, and download history fairly, ensuring a high-quality service for all.
             </p>
           </div>
         </section>

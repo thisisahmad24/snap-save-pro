@@ -20,7 +20,7 @@ SnapSave Pro is a high-performance web application that enables users to downloa
 We use a **Hybrid Architecture** to balance performance and reliability:
 - **Frontend**: Next.js 15 for a reactive and premium user interface.
 - **Backend**: Python (FastAPI) + `yt-dlp` for powerful and flexible media extraction.
-- **Database**: Supabase for managing users and download quotas.
+- **Database**: MongoDB Atlas for managing users, quotas, and download history.
 
 ---
 *Date: May 2026*
