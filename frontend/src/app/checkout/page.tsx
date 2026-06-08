@@ -5,42 +5,15 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { authHeaders, getStoredToken, saveSession } from "@/lib/session";
-
-type Quote = {
-  plan: string;
-  title: string;
-  country: string;
-  region: string;
-  currency: string;
-  amount_major: number;
-  amount_minor: number;
-  display_price: string;
-};
-
-const countryOptions = [
-  { code: "PK", label: "Pakistan" },
-  { code: "US", label: "United States" },
-  { code: "GB", label: "United Kingdom" },
-  { code: "EU", label: "Europe (EU)" },
-  { code: "CA", label: "Canada" },
-  { code: "AU", label: "Australia" },
-  { code: "IN", label: "India" },
-  { code: "AE", label: "United Arab Emirates" },
-  { code: "SA", label: "Saudi Arabia" },
-  { code: "SG", label: "Singapore" },
-];
-
-const regionOptions = [
-  { value: "asia", label: "Asia" },
-  { value: "europe", label: "Europe" },
-  { value: "north_america", label: "North America" },
-  { value: "south_america", label: "South America" },
-  { value: "africa", label: "Africa" },
-  { value: "middle_east", label: "Middle East" },
-  { value: "oceania", label: "Oceania" },
-  { value: "global", label: "Global" },
-];
+import {
+  getExchangeRates,
+  detectUserCurrency,
+  convertFromINR,
+  formatCurrency,
+  isBaseCurrency,
+} from "@/lib/currency";
+// TODO: Replace with MongoDB custom auth API call
+// import { getAuthUser, upgradeToPro } from "@/lib/auth";
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -49,119 +22,81 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(false);
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [error, setError] = useState("");
-  const [country, setCountry] = useState("PK");
-  const [region, setRegion] = useState("asia");
-  const [quote, setQuote] = useState<Quote | null>(null);
+  const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
+  const [transactionId, setTransactionId] = useState("");
+  const [userCurrency, setUserCurrency] = useState("INR");
+  const [rates, setRates] = useState<Record<string, number>>({});
+  const [ratesLoaded, setRatesLoaded] = useState(false);
   const router = useRouter();
 
-  const planCopy = useMemo(() => {
-    const labels: Record<string, { title: string; description: string }> = {
-      single: {
-        title: "Single Download Access",
-        description: "One-time purchase for a single regional download.",
-      },
-      pro: {
-        title: "Pro Monthly Subscription",
-        description: "Unlimited downloads, priority extraction, and faster support.",
-      },
-      custom: {
-        title: "Enterprise",
-        description: "Tailored pricing for teams and high-volume usage.",
-      },
-    };
-    return labels[effectivePlan] || labels.pro;
-  }, [effectivePlan]);
+  // Base prices in PKR — the canonical pricing source
+  const prices: Record<string, { name: string; priceINR: number; currency: string }> = {
+    pro:    { name: "Pro Monthly Subscription",  priceINR: 100, currency: "PKR" },
+    single: { name: "Single High-Speed Download", priceINR: 1,   currency: "PKR" },
+    custom: { name: "Custom Enterprise Plan",     priceINR: 0,   currency: ""    },
+  };
+
+  const currentPlan = prices[plan] ?? prices.pro;
 
   useEffect(() => {
-    const token = getStoredToken();
-    if (!token) {
+    // TODO: Replace with JWT token validation
+    const storedUser = localStorage.getItem("snap_user");
+    if (!storedUser) {
       router.push("/login?redirect=/checkout?plan=" + plan);
-      return;
+    } else {
+      try { setUser(JSON.parse(storedUser)); }
+      catch { router.push("/login"); }
     }
 
-    fetch("/api/auth/me", { headers: authHeaders() })
-      .then((response) => response.json())
-      .then((data) => {
-        if (!data.success || !data.user) {
-          router.push("/login?redirect=/checkout?plan=" + plan);
-          return;
-        }
-        setUser(data.user);
-        saveSession(token, data.user);
-        if (data.user.country) {
-          setCountry(String(data.user.country).toUpperCase().slice(0, 2));
-        }
-      })
-      .catch(() => router.push("/login"));
-  }, [effectivePlan, router, plan]);
+    // Load exchange rates & detect visitor currency in parallel
+    Promise.all([detectUserCurrency(), getExchangeRates()]).then(
+      ([currency, fetchedRates]) => {
+        setUserCurrency(currency);
+        setRates(fetchedRates);
+        setRatesLoaded(true);
+      }
+    );
+  }, [router, plan]);
 
-  useEffect(() => {
-    if (effectivePlan === "custom") {
-      setQuote(null);
-      return;
-    }
+  /** Returns the PKR price as a display string */
+  const inrPrice =
+    currentPlan.priceINR === 0
+      ? "Contact us"
+      : `Rs ${currentPlan.priceINR}`;
 
-    const controller = new AbortController();
-    setLoadingQuote(true);
-    setError("");
-
-    fetch("/api/payments/quote", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: effectivePlan, country, region }),
-      signal: controller.signal,
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        if (!data.success) {
-          throw new Error(data.error || "Could not load regional pricing.");
-        }
-        setQuote(data);
-      })
-      .catch((err) => {
-        if (err.name !== "AbortError") {
-          setError(err.message || "Could not load regional pricing.");
-        }
-      })
-      .finally(() => setLoadingQuote(false));
-
-    return () => controller.abort();
-  }, [country, effectivePlan, region]);
+  /** Returns the converted local-currency price string (or empty if PKR) */
+  const localPrice = (() => {
+    if (!ratesLoaded || isBaseCurrency(userCurrency) || currentPlan.priceINR === 0)
+      return "";
+    const converted = convertFromINR(currentPlan.priceINR, userCurrency, rates);
+    return formatCurrency(converted, userCurrency);
+  })();
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (effectivePlan === "custom") {
-      router.push("/contact");
-      return;
-    }
+    setStatus("processing");
 
-    setLoading(true);
-    setError("");
+    setTimeout(async () => {
+      try {
+        // TODO: Replace with POST to /api/auth/upgrade (MongoDB)
+        // const token = localStorage.getItem("snap_token");
+        // const res = await fetch("/api/auth/upgrade", {
+        //   method: "POST",
+        //   headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        //   body: JSON.stringify({ transaction_id: transactionId, plan }),
+        // });
+        // if (!res.ok) throw new Error("Payment verification failed");
 
-    try {
-      const response = await fetch("/api/payments/create-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...authHeaders(),
-        },
-        body: JSON.stringify({
-          plan: effectivePlan,
-          country,
-          region,
-          redirect_base_url: window.location.origin,
-        }),
-      });
+        // Temporary: update localStorage until MongoDB is configured
+        if (user) {
+          const updatedUser = { ...user, is_pro: true };
+          localStorage.setItem("snap_user", JSON.stringify(updatedUser));
+        }
 
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Could not start payment.");
-      }
-
-      if (data.url) {
-        window.location.href = data.url;
-        return;
+        setStatus("success");
+        setTimeout(() => router.push("/"), 3000);
+      } catch {
+        setStatus("error");
       }
 
       throw new Error("Stripe checkout URL was not returned.");
@@ -173,66 +108,233 @@ function CheckoutContent() {
   };
 
   return (
-    <main style={{ flex: 1, padding: "4rem 2rem", maxWidth: "1100px", margin: "0 auto", width: "100%" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))", gap: "4rem" }}>
+    <main
+      style={{
+        flex: 1,
+        padding: "4rem 2rem",
+        maxWidth: "1100px",
+        margin: "0 auto",
+        width: "100%",
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+          gap: "4rem",
+        }}
+      >
+        {/* ── Left: Order Summary ─────────────────────────────────── */}
         <section>
-          <h1 style={{ fontSize: "3rem", fontWeight: 900, marginBottom: "1rem", lineHeight: 1.2 }}>
-            Secure <span style={{ color: "var(--primary)" }}>Stripe</span> Checkout
+          <h1
+            style={{
+              fontSize: "3rem",
+              fontWeight: 900,
+              marginBottom: "2rem",
+              lineHeight: 1.2,
+            }}
+          >
+            Complete Your{" "}
+            <span style={{ color: "var(--primary)" }}>Upgrade</span>
           </h1>
-          <p style={{ opacity: 0.65, fontSize: "1.05rem", lineHeight: 1.7, marginBottom: "2rem" }}>
-            Choose your country and region to see localized pricing before you pay.
-          </p>
 
-          <div style={{ backgroundColor: "var(--card)", padding: "2.5rem", borderRadius: "2rem", border: "1px solid var(--border)", boxShadow: "0 10px 30px rgba(0,0,0,0.2)" }}>
-            <h3 style={{ marginBottom: "1.5rem", opacity: 0.7, fontSize: "0.85rem", fontWeight: 800, letterSpacing: "1.5px" }}>ORDER SUMMARY</h3>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1.2rem", fontWeight: 700, fontSize: "1.1rem", gap: "1rem" }}>
-              <span>{planCopy.title}</span>
-            <span>{loadingQuote ? "Loading..." : quote?.display_price || "—"}</span>
+          <div
+            style={{
+              backgroundColor: "var(--card)",
+              padding: "2.5rem",
+              borderRadius: "2rem",
+              border: "1px solid var(--border)",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+            }}
+          >
+            <h3
+              style={{
+                marginBottom: "1.5rem",
+                opacity: 0.7,
+                fontSize: "0.85rem",
+                fontWeight: 800,
+                letterSpacing: "1.5px",
+              }}
+            >
+              ORDER SUMMARY
+            </h3>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                marginBottom: "1.2rem",
+                fontWeight: 700,
+                fontSize: "1.1rem",
+              }}
+            >
+              <span>{currentPlan.name}</span>
+              <div style={{ textAlign: "right" }}>
+                <div>{inrPrice}</div>
+                {localPrice && (
+                  <div style={{ fontSize: "0.8rem", opacity: 0.5, fontWeight: 400 }}>
+                    ≈ {localPrice}
+                  </div>
+                )}
+              </div>
             </div>
-            <p style={{ opacity: 0.65, lineHeight: 1.6, marginBottom: "1rem" }}>{planCopy.description}</p>
-            <div style={{ display: "flex", justifyContent: "space-between", paddingBottom: "1.5rem", borderBottom: "1px solid var(--border)", marginBottom: "1.5rem", opacity: 0.5, fontSize: "0.95rem" }}>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                paddingBottom: "1.5rem",
+                borderBottom: "1px solid var(--border)",
+                marginBottom: "1.5rem",
+                opacity: 0.5,
+                fontSize: "0.95rem",
+              }}
+            >
               <span>Platform Service Fee</span>
               <span>Included</span>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "1.5rem", fontWeight: 900, color: "var(--primary)" }}>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: "1.5rem",
+                fontWeight: 900,
+                color: "var(--primary)",
+              }}
+            >
               <span>Total Amount</span>
-              <span>{loadingQuote ? "Loading..." : quote?.display_price || "—"}</span>
+              <div style={{ textAlign: "right" }}>
+                <div>{inrPrice}</div>
+                {localPrice && (
+                  <div style={{ fontSize: "0.9rem", opacity: 0.6, fontWeight: 400 }}>
+                    ≈ {localPrice}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <div style={{ marginTop: "3rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
-            <div style={{ border: "1px solid var(--border)", padding: "1.5rem", borderRadius: "1.5rem", textAlign: "center", backgroundColor: "rgba(255,255,255,0.02)" }}>
-              <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>🔒</div>
-              <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>Secure Stripe Checkout</div>
-            </div>
-            <div style={{ border: "1px solid var(--border)", padding: "1.5rem", borderRadius: "1.5rem", textAlign: "center", backgroundColor: "rgba(255,255,255,0.02)" }}>
-              <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>⚡</div>
-              <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>Localized Pricing</div>
-            </div>
+          {/* Trust badges */}
+          <div
+            style={{
+              marginTop: "3rem",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "1.5rem",
+            }}
+          >
+            {[
+              { icon: "🔒", label: "Secure SSL" },
+              { icon: "⚡", label: "Instant Activation" },
+            ].map(({ icon, label }) => (
+              <div
+                key={label}
+                style={{
+                  border: "1px solid var(--border)",
+                  padding: "1.5rem",
+                  borderRadius: "1.5rem",
+                  textAlign: "center",
+                  backgroundColor: "rgba(255,255,255,0.02)",
+                }}
+              >
+                <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>
+                  {icon}
+                </div>
+                <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>{label}</div>
+              </div>
+            ))}
           </div>
         </section>
 
-        <section style={{ backgroundColor: "var(--card)", padding: "3rem", borderRadius: "2.5rem", border: "1px solid var(--border)", boxShadow: "0 25px 50px rgba(0,0,0,0.5)" }}>
-          {effectivePlan === "custom" ? (
+        {/* ── Right: Payment Form ─────────────────────────────────── */}
+        <section
+          style={{
+            backgroundColor: "var(--card)",
+            padding: "3rem",
+            borderRadius: "2.5rem",
+            border: "1px solid var(--border)",
+            boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
+          }}
+        >
+          {status === "success" ? (
             <div style={{ textAlign: "center", padding: "3rem 1rem" }}>
-              <h2 style={{ fontSize: "2rem", marginBottom: "1rem", fontWeight: 900 }}>Enterprise Pricing</h2>
-              <p style={{ opacity: 0.7, lineHeight: 1.6, marginBottom: "2rem" }}>
-                Contact us and we’ll tailor a regional payment setup for your team.
+              <div style={{ fontSize: "5rem", marginBottom: "1.5rem" }}>✅</div>
+              <h2 style={{ fontSize: "2rem", marginBottom: "1rem", fontWeight: 900 }}>
+                Payment Submitted!
+              </h2>
+              <p style={{ opacity: 0.6, fontSize: "1.1rem", lineHeight: 1.6 }}>
+                Your transaction ID has been received. Your account has been
+                upgraded to PRO. You now have unlimited downloads.
               </p>
-              <Link href="/contact" style={{ display: "inline-block", padding: "1rem 1.5rem", borderRadius: "1rem", backgroundColor: "var(--primary)", color: "white", fontWeight: 800, textDecoration: "none" }}>
-                Contact Sales
-              </Link>
+              <p style={{ marginTop: "2rem", fontSize: "0.9rem", opacity: 0.4 }}>
+                Redirecting to home page...
+              </p>
             </div>
           ) : (
-            <form onSubmit={handlePayment} style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-              <h3 style={{ fontSize: "1.5rem", fontWeight: 900, marginBottom: "0.5rem" }}>Pay with Stripe</h3>
-              <p style={{ opacity: 0.65, lineHeight: 1.6 }}>
-                Select your country and region. The checkout amount updates automatically in the local currency we’ve configured for that market.
-              </p>
+            <form
+              onSubmit={handlePayment}
+              style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}
+            >
+              <h3 style={{ fontSize: "1.5rem", fontWeight: 900, marginBottom: "0.5rem" }}>
+                Pay via SadaPay
+              </h3>
 
-              {error && (
-                <div style={{ color: "#ff4b4b", fontSize: "0.9rem", textAlign: "center", padding: "0.8rem", backgroundColor: "rgba(255, 75, 75, 0.1)", borderRadius: "0.75rem", border: "1px solid rgba(255, 75, 75, 0.2)" }}>
-                  {error}
+              {/* Step 1: Transfer */}
+              <div
+                style={{
+                  padding: "1.5rem",
+                  backgroundColor: "rgba(255, 107, 107, 0.1)",
+                  border: "1px solid var(--primary)",
+                  borderRadius: "1rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.8rem",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "0.9rem",
+                    fontWeight: 700,
+                    color: "var(--primary)",
+                    textTransform: "uppercase",
+                    letterSpacing: "1px",
+                  }}
+                >
+                  Step 1: Transfer Funds
+                </div>
+                <p style={{ fontSize: "1rem", lineHeight: 1.5 }}>
+                  Please send exactly{" "}
+                  <strong>{inrPrice}</strong>
+                  {localPrice && (
+                    <span style={{ opacity: 0.6, fontSize: "0.9rem" }}>
+                      {" "}(≈ {localPrice})
+                    </span>
+                  )}{" "}
+                  to the following SadaPay account:
+                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    backgroundColor: "var(--background)",
+                    padding: "1rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "1.2rem",
+                      fontWeight: 800,
+                      letterSpacing: "2px",
+                    }}
+                  >
+                    03114512268
+                  </div>
+                  <div style={{ fontSize: "0.85rem", opacity: 0.6 }}>SadaPay</div>
                 </div>
               )}
 
@@ -268,38 +370,96 @@ function CheckoutContent() {
                 </label>
               </div>
 
-              <div style={{ padding: "1.25rem", borderRadius: "1rem", backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}>
-                <div style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--primary)", marginBottom: "0.5rem" }}>Localized Quote</div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
-                  <span style={{ opacity: 0.7 }}>Currency</span>
-                  <span style={{ fontWeight: 800 }}>{quote?.currency || "—"}</span>
+              {/* Step 2: Verify */}
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.6rem",
+                  marginTop: "1rem",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "0.9rem",
+                    fontWeight: 700,
+                    color: "var(--primary)",
+                    textTransform: "uppercase",
+                    letterSpacing: "1px",
+                  }}
+                >
+                  Step 2: Verify Payment
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
-                  <span style={{ opacity: 0.7 }}>Amount</span>
-                  <span style={{ fontWeight: 800 }}>{quote?.display_price || (loadingQuote ? "Loading..." : "—")}</span>
-                </div>
+                <label
+                  style={{ fontSize: "0.9rem", fontWeight: 700, opacity: 0.8 }}
+                >
+                  Enter your 11-digit SadaPay Transaction ID
+                </label>
+                <input
+                  id="transaction-id-input"
+                  type="text"
+                  value={transactionId}
+                  onChange={(e) => setTransactionId(e.target.value)}
+                  placeholder="e.g. 12345678901"
+                  required
+                  style={{
+                    padding: "1rem 1.25rem",
+                    borderRadius: "1rem",
+                    backgroundColor: "var(--background)",
+                    border: "1px solid var(--border)",
+                    color: "white",
+                    fontSize: "1rem",
+                    outline: "none",
+                  }}
+                />
               </div>
 
               <button
+                id="confirm-payment-btn"
                 type="submit"
-                disabled={loading || loadingQuote}
+                disabled={status === "processing" || !transactionId}
                 style={{
-                  marginTop: "1rem",
+                  marginTop: "1.5rem",
                   padding: "1.25rem",
                   borderRadius: "var(--radius)",
                   backgroundColor: "var(--primary)",
                   color: "white",
                   border: "none",
                   fontWeight: 900,
-                  cursor: loading || loadingQuote ? "not-allowed" : "pointer",
-                  opacity: loading || loadingQuote ? 0.75 : 1,
+                  cursor:
+                    status === "processing" || !transactionId
+                      ? "not-allowed"
+                      : "pointer",
+                  opacity:
+                    status === "processing" || !transactionId ? 0.7 : 1,
                   boxShadow: "0 15px 30px var(--primary-glow)",
-                  fontSize: "1.05rem",
+                  fontSize: "1.1rem",
                   transition: "transform 0.2s",
                 }}
+                onMouseEnter={(e) => {
+                  if (status !== "processing" && transactionId)
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                }}
               >
-                {loading ? "Opening Stripe Checkout..." : `Pay ${quote?.display_price || "—"} with Stripe`}
+                {status === "processing"
+                  ? "Verifying Transaction..."
+                  : `Confirm Payment of ${inrPrice}`}
               </button>
+
+              <p
+                style={{
+                  textAlign: "center",
+                  fontSize: "0.85rem",
+                  opacity: 0.4,
+                  lineHeight: 1.5,
+                }}
+              >
+                Your transaction will be processed securely. If you face any
+                issues, please contact support via WhatsApp.
+              </p>
             </form>
           )}
         </section>
@@ -312,7 +472,21 @@ export default function Checkout() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <Suspense fallback={<div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "white" }}>Initializing secure checkout...</div>}>
+      <Suspense
+        fallback={
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "white",
+            }}
+          >
+            Initializing Secure Checkout...
+          </div>
+        }
+      >
         <CheckoutContent />
       </Suspense>
       <Footer />

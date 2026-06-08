@@ -4,7 +4,15 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { authHeaders, getStoredToken, getStoredUser, saveSession } from "@/lib/session";
+import {
+  getExchangeRates,
+  detectUserCurrency,
+  convertFromINR,
+  formatCurrency,
+  isBaseCurrency,
+} from "@/lib/currency";
+// TODO: Replace with MongoDB custom auth
+// import { getAuthUser } from "@/lib/auth";
 
 export default function Home() {
   const [url, setUrl] = useState("");
@@ -14,6 +22,9 @@ export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [limitReached, setLimitReached] = useState(false);
   const [recentDownloads, setRecentDownloads] = useState<any[]>([]);
+  const [userCurrency, setUserCurrency] = useState("INR");
+  const [rates, setRates] = useState<Record<string, number>>({});
+  const [ratesLoaded, setRatesLoaded] = useState(false);
 
   useEffect(() => {
     const cachedUser = getStoredUser();
@@ -21,33 +32,17 @@ export default function Home() {
       setUser(cachedUser);
     }
 
-    const token = getStoredToken();
-    if (token) {
-      fetch("/api/auth/me", { headers: authHeaders() })
-        .then((response) => response.json())
-        .then((data) => {
-          if (data.success && data.user) {
-            saveSession(token, data.user);
-            setUser(data.user);
-          }
-        })
-        .catch(() => null);
+    const saved = localStorage.getItem("recent_downloads");
+    if (saved) setRecentDownloads(JSON.parse(saved).slice(0, 5));
 
-      fetch("/api/auth/me/downloads", { headers: authHeaders() })
-        .then((response) => response.json())
-        .then((data) => {
-          if (data.success && Array.isArray(data.downloads)) {
-            setRecentDownloads(data.downloads.slice(0, 5));
-          }
-        })
-        .catch(() => {
-          const saved = localStorage.getItem("recent_downloads");
-          if (saved) setRecentDownloads(JSON.parse(saved).slice(0, 5));
-        });
-    } else {
-      const saved = localStorage.getItem("recent_downloads");
-      if (saved) setRecentDownloads(JSON.parse(saved).slice(0, 5));
-    }
+    // Detect visitor currency & fetch exchange rates for price display
+    Promise.all([detectUserCurrency(), getExchangeRates()]).then(
+      ([currency, fetchedRates]) => {
+        setUserCurrency(currency);
+        setRates(fetchedRates);
+        setRatesLoaded(true);
+      }
+    );
   }, []);
 
   /**
@@ -205,7 +200,9 @@ export default function Home() {
                     textDecoration: 'none',
                     fontSize: '0.9rem'
                   }}>
-                    Pay PKR 10 for this download
+                    Pay Rs 1{ratesLoaded && !isBaseCurrency(userCurrency)
+                      ? ` (≈ ${formatCurrency(convertFromINR(1, userCurrency, rates), userCurrency)})`
+                      : ''} for this download
                   </Link>
                   <Link href="/pricing" style={{
                     padding: '0.8rem 1.5rem',
@@ -217,7 +214,7 @@ export default function Home() {
                     fontSize: '0.9rem',
                     boxShadow: '0 5px 15px var(--primary-glow)'
                   }}>
-                    Upgrade to PRO (Unlimited)
+                    Upgrade to PRO — Rs 100/month
                   </Link>
                 </div>
               )}
@@ -382,7 +379,7 @@ export default function Home() {
           </div>
           <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             {[
-              { q: "Is it free to use?", a: "Yes! You get 5 free Instagram and 3 free YouTube downloads every day. For more, you can pay a small fee of PKR 10 per download." },
+              { q: "Is it free to use?", a: "Yes! You get 3 free downloads every day at no cost. Once your daily limit is reached, you can pay just Rs 1 per video (auto-converted to your local currency) or upgrade to Pro for Rs 100/month for unlimited downloads." },
               { q: "Do I need to install any software?", a: "No, SnapSave Pro is a 100% web-based tool. You only need a modern browser." },
               { q: "Which platforms are supported?", a: "Currently we support Instagram (Reels, Photos, IGTV) and YouTube (Shorts, Videos). More platforms are coming soon!" }
             ].map((faq, i) => (
